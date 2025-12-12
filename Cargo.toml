@@ -1,0 +1,70 @@
+[package]
+name = "audiobook-forge"
+version = "2.0.0"
+edition = "2021"
+authors = ["Audiobook Forge Contributors"]
+license = "MIT"
+description = "CLI tool for converting audiobook directories to M4B format with chapters and metadata"
+readme = "README.md"
+keywords = ["audiobook", "m4b", "ffmpeg", "cli", "audio"]
+
+[dependencies]
+# CLI framework
+clap = { version = "4.5", features = ["derive", "cargo", "wrap_help"] }
+
+# Async runtime for parallel processing
+tokio = { version = "1.35", features = ["full"] }
+tokio-stream = "0.1"
+
+# Progress bars and terminal UI
+indicatif = "0.17"
+console = "0.15"
+
+# Audio metadata
+id3 = "1.13"
+mp4ameta = "0.11"
+
+# Configuration and serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File system utilities
+walkdir = "2.4"
+glob = "0.3"
+sanitize-filename = "0.5"
+
+# String utilities
+regex = "1.10"
+natord = "1.0"
+unicode-normalization = "0.1"
+
+# System utilities
+which = "6.0"
+dirs = "5.0"
+num_cpus = "1.16"
+
+# Date/time
+chrono = "0.4"
+
+# Future utilities
+futures = "0.3"
+
+[dev-dependencies]
+tempfile = "3.8"
+assert_cmd = "2.0"
+predicates = "3.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

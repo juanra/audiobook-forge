@@ -1,0 +1,105 @@
+# Audiobook Forge Configuration File
+#
+# This file configures the behavior of audiobook-forge. All settings are optional.
+# CLI arguments override these settings.
+
+# ============================================================================
+# DIRECTORIES
+# ============================================================================
+directories:
+  # Source directory for audiobooks (overrides --root)
+  # Example: /Users/username/Audiobooks
+  source: null
+
+  # Output directory for M4B files
+  # Options: "same_as_source" or a custom path
+  output: "same_as_source"
+
+# ============================================================================
+# PROCESSING
+# ============================================================================
+processing:
+  # Number of audiobooks to process simultaneously (1-8)
+  parallel_workers: 2
+
+  # Skip folders that already have M4B files
+  skip_existing: true
+
+  # Always reprocess, overwriting existing M4B files
+  force_reprocess: false
+
+  # Fix metadata in existing M4B files without re-encoding
+  normalize_existing: false
+
+  # Keep temporary files for debugging
+  keep_temp_files: false
+
+# ============================================================================
+# QUALITY
+# ============================================================================
+quality:
+  # Prefer stereo over mono when quality is otherwise equal
+  prefer_stereo: true
+
+  # Chapter detection method
+  # Options: "auto", "files", "cue", "id3", "none"
+  chapter_source: "auto"
+
+# ============================================================================
+# METADATA
+# ============================================================================
+metadata:
+  # Default language for metadata (ISO 639-1 code)
+  default_language: "es"
+
+  # Cover art filenames to search for (in order of priority)
+  cover_filenames:
+    - "cover.jpg"
+    - "folder.jpg"
+    - "cover.png"
+    - "folder.png"
+
+# ============================================================================
+# ORGANIZATION
+# ============================================================================
+organization:
+  # Folder name for completed audiobooks
+  m4b_folder: "M4B"
+
+  # Folder name for audiobooks queued for conversion
+  convert_folder: "To_Convert"
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+logging:
+  # Automatically create log files
+  log_to_file: false
+
+  # Custom log file path (optional)
+  # Example: /var/log/audiobook-forge.log
+  log_file: null
+
+  # Log verbosity level
+  # Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR"
+  log_level: "INFO"
+
+# ============================================================================
+# ADVANCED
+# ============================================================================
+advanced:
+  # Custom path to FFmpeg binary (auto-detected if null)
+  ffmpeg_path: null
+
+  # Custom path to AtomicParsley binary (auto-detected if null)
+  atomic_parsley_path: null
+
+  # Custom path to MP4Box binary (auto-detected if null)
+  mp4box_path: null
+
+  # Custom directory for temporary files (system temp if null)
+  temp_directory: null
+
+  # Use Apple Silicon hardware encoder (aac_at) - auto-detected if null
+  # Only works on Apple Silicon Macs
+  use_apple_silicon_encoder: null
