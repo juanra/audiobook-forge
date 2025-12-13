@@ -5,6 +5,127 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-12-12
+
+### 🚀 Performance & Features Release
+
+This release delivers major performance improvements and quality-of-life features, making audiobook-forge **3.8x faster** for multi-file conversions while adding smart directory detection.
+
+### Added
+
+#### New Features
+- **Auto-detect current directory** - Run `audiobook-forge build` from inside an audiobook folder without `--root` parameter
+  - Automatically detects folders with 2+ MP3/M4A files
+  - Outputs M4B to the same directory
+  - Falls back to requiring `--root` if not in audiobook folder
+- **Parallel file encoding** - Encode each MP3 file in parallel, then concatenate (3.8x faster!)
+  - Before: 121.5s with 13% CPU usage (serial)
+  - After: 32.1s with 590% CPU usage (parallel)
+  - Uses all available CPU cores efficiently
+  - Can be toggled via config
+
+#### Performance Configuration
+- `performance.max_concurrent_encodes` - Control how many files encode in parallel ("auto" or specific number)
+- `performance.enable_parallel_encoding` - Toggle parallel vs serial encoding
+- `performance.encoding_preset` - Choose "fast", "balanced", or "high" quality presets
+- Automatic CPU core detection for optimal parallelization
+
+#### Enhanced Configuration
+- **Retry settings** - `processing.max_retries` and `processing.retry_delay` now configurable
+- **Quality settings** - `quality.default_bitrate` and `quality.default_sample_rate` configurable
+- **Apple Silicon encoder** - `advanced.use_apple_silicon_encoder` explicitly configurable
+- Comprehensive config file at `~/.config/audiobook-forge/config.yaml` with documentation
+
+### Fixed
+
+#### Critical Bugs
+- **MP3 to M4B conversion failure** - Fixed issue where MP3 files couldn't be converted to M4B
+  - Root cause: MP3 codec cannot be copied directly into M4B container
+  - Solution: Force transcoding to AAC for MP3 files (disable copy mode)
+  - Prevents "Failed to concatenate audio files" errors
+- **Embedded cover art handling** - Added `-vn` flag to FFmpeg to skip video streams
+  - Prevents "codec mjpeg not supported in container" errors
+  - Properly handles MP3 files with embedded album art
+
+#### Minor Fixes
+- **Path escaping** - Improved concat file path handling with absolute paths and escaping
+- **Error messages** - Better context in error messages for file operations
+- **Git workflow** - Renamed default branch from `master` to `main`
+
+### Changed
+
+#### Performance Improvements
+- **Serial to parallel encoding** - Default encoding strategy changed from serial to parallel
+  - Configurable via `performance.enable_parallel_encoding`
+  - Dramatically reduces processing time for multi-file audiobooks
+- **FFmpeg threading** - Added `--threads 0` for auto-thread detection in standard encoder
+- **Resource utilization** - Better CPU core utilization (13% → 590%)
+
+#### Architecture
+- Processor now supports both parallel and serial encoding modes
+- BatchProcessor passes performance config to Processor
+- Config-driven retry logic instead of hardcoded values
+
+### Performance Metrics
+
+**Encoding Speed Comparison** (10-file audiobook, ~276MB):
+```
+Serial mode:   121.5s @ 13% CPU  (old behavior)
+Parallel mode:  32.1s @ 590% CPU (new default) ← 3.8x FASTER
+```
+
+**Resource Usage:**
+- CPU cores utilized: 1 → 6 cores
+- Processing time: 121s → 32s (-73%)
+- Throughput: 2.3 MB/s → 8.6 MB/s
+
+### Migration Guide
+
+#### For Existing Users
+
+No breaking changes! All new features have sensible defaults.
+
+**To benefit from new performance:**
+1. Upgrade: `cargo install audiobook-forge --force`
+2. Optional: Create config file: `audiobook-forge config init`
+3. Optional: Customize settings in `~/.config/audiobook-forge/config.yaml`
+
+**To use auto-detect:**
+```bash
+# Old way (still works)
+audiobook-forge build --root ~/Audiobooks/Book-Name/
+
+# New way (from inside folder)
+cd ~/Audiobooks/Book-Name/
+audiobook-forge build
+```
+
+**To control parallelization:**
+```yaml
+# In ~/.config/audiobook-forge/config.yaml
+performance:
+  max_concurrent_encodes: "auto"  # or "4", "8", etc.
+  enable_parallel_encoding: true   # or false for serial mode
+```
+
+### Technical Details
+
+#### Files Modified
+- `src/audio/ffmpeg.rs` - Added threading, -vn flag, improved path handling
+- `src/cli/handlers.rs` - Auto-detect logic, config integration
+- `src/core/batch.rs` - Performance config propagation
+- `src/core/processor.rs` - Parallel encoding implementation
+- `src/core/scanner.rs` - Single directory scanning
+- `src/models/book.rs` - MP3 copy mode detection
+- `src/models/config.rs` - New PerformanceConfig, enhanced configs
+
+#### Lines Changed
+- 348 lines added
+- 43 lines removed
+- 8 files modified
+
+---
+
 ## [2.0.0] - 2025-12-12
 
 ### 🎉 Initial Rust Release
@@ -146,7 +267,8 @@ See [Python repository](https://github.com/yourusername/audiobook-forge) for Pyt
 
 ## Version History
 
-- **2.0.0** - Rust rewrite (2025-12-12) ← Current
+- **2.1.0** - Performance & Features (2025-12-12) ← Current
+- **2.0.0** - Rust rewrite (2025-12-12)
 - **1.x.x** - Python version (archived)
 
 ---

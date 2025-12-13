@@ -8,25 +8,79 @@ use anyhow::{Context, Result};
 use console::style;
 use std::path::PathBuf;
 
+/// Try to detect if current directory is an audiobook folder
+fn try_detect_current_as_audiobook() -> Result<Option<PathBuf>> {
+    let current_dir = std::env::current_dir()
+        .context("Failed to get current directory")?;
+
+    // Safety check: Don't auto-detect from filesystem root
+    if current_dir.parent().is_none() {
+        return Ok(None);
+    }
+
+    // Check for MP3 files in current directory
+    let entries = std::fs::read_dir(&current_dir)
+        .context("Failed to read current directory")?;
+
+    let mp3_count = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("mp3") || ext.eq_ignore_ascii_case("m4a"))
+                .unwrap_or(false)
+        })
+        .count();
+
+    // Require at least 2 MP3 files to consider it an audiobook (BookCase A)
+    if mp3_count >= 2 {
+        Ok(Some(current_dir))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Handle the build command
 pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
-    // Determine root directory (CLI arg > config > error)
-    let root = args
-        .root
-        .or(config.directories.source.clone())
-        .context("No root directory specified. Use --root or configure directories.source")?;
+    // Determine root directory (CLI arg > config > auto-detect > error)
+    let (root, auto_detected) = if let Some(root_path) = args.root.or(config.directories.source.clone()) {
+        (root_path, false)
+    } else {
+        // Try auto-detecting current directory
+        if let Some(current) = try_detect_current_as_audiobook()? {
+            println!(
+                "{} Auto-detected audiobook folder: {}",
+                style("→").cyan(),
+                style(current.display()).yellow()
+            );
+            (current, true)
+        } else {
+            anyhow::bail!(
+                "No root directory specified. Use --root, configure directories.source, or run from inside an audiobook folder"
+            );
+        }
+    };
 
-    println!(
-        "{} Scanning audiobooks in: {}",
-        style("→").cyan(),
-        style(root.display()).yellow()
-    );
+    if !auto_detected {
+        println!(
+            "{} Scanning audiobooks in: {}",
+            style("→").cyan(),
+            style(root.display()).yellow()
+        );
+    }
 
     // Scan for audiobooks
     let scanner = Scanner::new();
-    let mut book_folders = scanner
-        .scan_directory(&root)
-        .context("Failed to scan directory")?;
+    let mut book_folders = if auto_detected {
+        // Auto-detect mode: treat current dir as single book
+        vec![scanner.scan_single_directory(&root)?]
+    } else {
+        // Normal mode: scan for multiple books
+        scanner
+            .scan_directory(&root)
+            .context("Failed to scan directory")?
+    };
 
     if book_folders.is_empty() {
         println!("{} No audiobooks found", style("✗").red());
@@ -87,23 +141,53 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     println!("{} Analysis complete", style("✓").green());
 
     // Determine output directory
-    let output_dir = args.out.or_else(|| {
-        if config.directories.output == "same_as_source" {
-            Some(root.clone())
-        } else {
-            Some(PathBuf::from(&config.directories.output))
-        }
-    }).context("No output directory specified")?;
+    let output_dir = if auto_detected {
+        // When auto-detected, default to current directory
+        args.out.unwrap_or(root.clone())
+    } else {
+        // Normal mode: respect config
+        args.out.or_else(|| {
+            if config.directories.output == "same_as_source" {
+                Some(root.clone())
+            } else {
+                Some(PathBuf::from(&config.directories.output))
+            }
+        }).context("No output directory specified")?
+    };
 
-    // Create batch processor
+    // Create batch processor with config settings
     let workers = args.parallel.unwrap_or(config.processing.parallel_workers) as usize;
     let keep_temp = args.keep_temp || config.processing.keep_temp_files;
-    let use_apple_silicon = true; // Auto-detect in future
-    let max_concurrent = 2; // Could be configurable
-    let retry_config = RetryConfig::new();
 
-    let batch_processor =
-        BatchProcessor::with_options(workers, keep_temp, use_apple_silicon, max_concurrent, retry_config);
+    // Use Apple Silicon encoder if configured, otherwise auto-detect
+    let use_apple_silicon = config.advanced.use_apple_silicon_encoder.unwrap_or(true);
+
+    // Parse max concurrent encodes from config
+    let max_concurrent = if config.performance.max_concurrent_encodes == "auto" {
+        num_cpus::get() // Use all CPU cores
+    } else {
+        config.performance.max_concurrent_encodes
+            .parse::<usize>()
+            .unwrap_or(num_cpus::get())
+            .clamp(1, 16)
+    };
+
+    // Create retry config from settings
+    let retry_config = RetryConfig::with_settings(
+        config.processing.max_retries as usize,
+        std::time::Duration::from_secs(config.processing.retry_delay),
+        std::time::Duration::from_secs(30),
+        2.0,
+    );
+
+    let batch_processor = BatchProcessor::with_options(
+        workers,
+        keep_temp,
+        use_apple_silicon,
+        config.performance.enable_parallel_encoding,
+        max_concurrent,
+        retry_config,
+    );
 
     // Process batch
     println!("\n{} Processing {} audiobook(s)...\n", style("→").cyan(), book_folders.len());

@@ -9,6 +9,8 @@ pub struct Config {
     #[serde(default)]
     pub directories: DirectoryConfig,
     #[serde(default)]
+    pub performance: PerformanceConfig,
+    #[serde(default)]
     pub processing: ProcessingConfig,
     #[serde(default)]
     pub quality: QualityConfig,
@@ -26,6 +28,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             directories: DirectoryConfig::default(),
+            performance: PerformanceConfig::default(),
             processing: ProcessingConfig::default(),
             quality: QualityConfig::default(),
             metadata: MetadataConfig::default(),
@@ -59,6 +62,39 @@ fn default_output() -> String {
     "same_as_source".to_string()
 }
 
+/// Performance configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformanceConfig {
+    /// Maximum number of files to encode in parallel
+    /// "auto" = use all CPU cores, or specify a number
+    #[serde(default = "default_max_concurrent_encodes")]
+    pub max_concurrent_encodes: String,
+    /// Enable parallel file encoding (faster but more CPU/memory)
+    #[serde(default = "default_true")]
+    pub enable_parallel_encoding: bool,
+    /// Encoding quality preset: "fast", "balanced", "high"
+    #[serde(default = "default_encoding_preset")]
+    pub encoding_preset: String,
+}
+
+impl Default for PerformanceConfig {
+    fn default() -> Self {
+        Self {
+            max_concurrent_encodes: "auto".to_string(),
+            enable_parallel_encoding: true,
+            encoding_preset: "balanced".to_string(),
+        }
+    }
+}
+
+fn default_max_concurrent_encodes() -> String {
+    "auto".to_string()
+}
+
+fn default_encoding_preset() -> String {
+    "balanced".to_string()
+}
+
 /// Processing configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessingConfig {
@@ -77,6 +113,12 @@ pub struct ProcessingConfig {
     /// Keep temporary files for debugging
     #[serde(default)]
     pub keep_temp_files: bool,
+    /// Maximum number of retry attempts
+    #[serde(default = "default_max_retries")]
+    pub max_retries: u8,
+    /// Initial retry delay in seconds
+    #[serde(default = "default_retry_delay")]
+    pub retry_delay: u64,
 }
 
 impl Default for ProcessingConfig {
@@ -87,8 +129,18 @@ impl Default for ProcessingConfig {
             force_reprocess: false,
             normalize_existing: false,
             keep_temp_files: false,
+            max_retries: 2,
+            retry_delay: 1,
         }
     }
+}
+
+fn default_max_retries() -> u8 {
+    2
+}
+
+fn default_retry_delay() -> u64 {
+    1
 }
 
 fn default_parallel_workers() -> u8 {
@@ -108,6 +160,12 @@ pub struct QualityConfig {
     /// Chapter source priority ("auto", "files", "cue", etc.)
     #[serde(default = "default_chapter_source")]
     pub chapter_source: String,
+    /// Default bitrate in kbps ("auto" or specific: 64, 128, 256)
+    #[serde(default = "default_bitrate")]
+    pub default_bitrate: String,
+    /// Default sample rate in Hz ("auto" or specific: 44100, 48000)
+    #[serde(default = "default_sample_rate")]
+    pub default_sample_rate: String,
 }
 
 impl Default for QualityConfig {
@@ -115,11 +173,21 @@ impl Default for QualityConfig {
         Self {
             prefer_stereo: true,
             chapter_source: "auto".to_string(),
+            default_bitrate: "auto".to_string(),
+            default_sample_rate: "auto".to_string(),
         }
     }
 }
 
 fn default_chapter_source() -> String {
+    "auto".to_string()
+}
+
+fn default_bitrate() -> String {
+    "auto".to_string()
+}
+
+fn default_sample_rate() -> String {
     "auto".to_string()
 }
 

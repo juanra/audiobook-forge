@@ -15,6 +15,8 @@ pub struct BatchProcessor {
     keep_temp: bool,
     /// Use Apple Silicon hardware encoder
     use_apple_silicon: bool,
+    /// Enable parallel file encoding
+    enable_parallel_encoding: bool,
     /// Maximum concurrent encoding operations (to limit CPU usage)
     max_concurrent_encodes: usize,
     /// Retry configuration
@@ -28,6 +30,7 @@ impl BatchProcessor {
             workers: workers.clamp(1, 16),
             keep_temp: false,
             use_apple_silicon: false,
+            enable_parallel_encoding: true,
             max_concurrent_encodes: 2, // Default: 2 concurrent encodes
             retry_config: RetryConfig::new(),
         }
@@ -38,6 +41,7 @@ impl BatchProcessor {
         workers: usize,
         keep_temp: bool,
         use_apple_silicon: bool,
+        enable_parallel_encoding: bool,
         max_concurrent_encodes: usize,
         retry_config: RetryConfig,
     ) -> Self {
@@ -45,7 +49,8 @@ impl BatchProcessor {
             workers: workers.clamp(1, 16),
             keep_temp,
             use_apple_silicon,
-            max_concurrent_encodes: max_concurrent_encodes.clamp(1, 8),
+            enable_parallel_encoding,
+            max_concurrent_encodes: max_concurrent_encodes.clamp(1, 16),
             retry_config,
         }
     }
@@ -85,6 +90,7 @@ impl BatchProcessor {
             let chapter_source = chapter_source.to_string();
             let keep_temp = self.keep_temp;
             let use_apple_silicon = self.use_apple_silicon;
+            let enable_parallel_encoding = self.enable_parallel_encoding;
             let encode_semaphore = Arc::clone(&encode_semaphore);
             let retry_config = self.retry_config.clone();
 
@@ -107,6 +113,7 @@ impl BatchProcessor {
                         &chapter_source,
                         keep_temp,
                         use_apple_silicon,
+                        enable_parallel_encoding,
                     )
                 })
                 .await
@@ -154,8 +161,9 @@ impl BatchProcessor {
         chapter_source: &str,
         keep_temp: bool,
         use_apple_silicon: bool,
+        enable_parallel_encoding: bool,
     ) -> Result<ProcessingResult> {
-        let processor = Processor::with_options(keep_temp, use_apple_silicon)?;
+        let processor = Processor::with_options(keep_temp, use_apple_silicon, enable_parallel_encoding)?;
 
         let result = processor
             .process_book(book, output_dir, chapter_source)

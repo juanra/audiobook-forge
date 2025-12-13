@@ -8,6 +8,7 @@ use std::process::Stdio;
 use tokio::process::Command;
 
 /// FFmpeg operations wrapper
+#[derive(Clone)]
 pub struct FFmpeg {
     /// Path to ffmpeg binary
     ffmpeg_path: String,
@@ -141,6 +142,9 @@ impl FFmpeg {
         ])
         .arg(concat_file);
 
+        // Skip video streams (embedded cover art in MP3s)
+        cmd.arg("-vn");
+
         if use_copy {
             // Copy mode - no re-encoding
             cmd.args(&["-c", "copy"]);
@@ -153,6 +157,12 @@ impl FFmpeg {
                 "-ar", &quality.sample_rate.to_string(),
                 "-ac", &quality.channels.to_string(),
             ]);
+
+            // Use multiple threads for encoding (auto = use all available cores)
+            if !use_apple_silicon {
+                // Standard aac encoder benefits from threading
+                cmd.args(&["-threads", "0"]); // 0 = auto-detect optimal thread count
+            }
         }
 
         // Add faststart flag for better streaming
@@ -189,6 +199,9 @@ impl FFmpeg {
         cmd.args(&["-y", "-i"])
             .arg(input_file);
 
+        // Skip video streams (embedded cover art in MP3s)
+        cmd.arg("-vn");
+
         if use_copy {
             cmd.args(&["-c", "copy"]);
         } else {
@@ -199,6 +212,12 @@ impl FFmpeg {
                 "-ar", &quality.sample_rate.to_string(),
                 "-ac", &quality.channels.to_string(),
             ]);
+
+            // Use multiple threads for encoding (auto = use all available cores)
+            if !use_apple_silicon {
+                // Standard aac encoder benefits from threading
+                cmd.args(&["-threads", "0"]); // 0 = auto-detect optimal thread count
+            }
         }
 
         cmd.args(&["-movflags", "+faststart"]);
@@ -219,14 +238,33 @@ impl FFmpeg {
         Ok(())
     }
 
-    /// Create concat file for FFmpeg
+    /// Create concat file for FFmpeg with proper path escaping
     pub fn create_concat_file(files: &[&Path], output: &Path) -> Result<()> {
         let mut content = String::new();
         for file in files {
-            content.push_str(&format!("file '{}'\n", file.display()));
+            // Verify file exists before adding to concat list
+            if !file.exists() {
+                anyhow::bail!("File not found: {}", file.display());
+            }
+
+            // Get absolute path for better compatibility
+            let abs_path = file.canonicalize()
+                .with_context(|| format!("Failed to resolve path: {}", file.display()))?;
+
+            // Escape the path for FFmpeg concat format
+            // FFmpeg concat format requires:
+            // - Single quotes around path
+            // - Single quotes within path must be escaped as '\''
+            // - Backslashes should be forward slashes (even on Windows for -safe 0)
+            let path_str = abs_path.to_string_lossy();
+            let escaped = path_str.replace('\'', r"'\''");
+
+            content.push_str(&format!("file '{}'\n", escaped));
         }
+
         std::fs::write(output, content)
             .context("Failed to write concat file")?;
+
         Ok(())
     }
 }

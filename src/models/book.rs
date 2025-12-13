@@ -115,6 +115,16 @@ impl BookFolder {
 
     /// Check if all tracks can be concatenated without re-encoding (copy mode)
     pub fn can_use_concat_copy(&self) -> bool {
+        if self.tracks.is_empty() {
+            return false;
+        }
+
+        // MP3 codec cannot be copied into M4B container - must transcode to AAC
+        let first_codec = self.tracks[0].quality.codec.to_lowercase();
+        if first_codec == "mp3" || first_codec == "mp3float" {
+            return false;
+        }
+
         if self.tracks.len() <= 1 {
             return true;
         }

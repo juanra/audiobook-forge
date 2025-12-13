@@ -66,6 +66,24 @@ impl Scanner {
         Ok(book_folders)
     }
 
+    /// Scan a single directory as an audiobook folder (for auto-detect mode)
+    pub fn scan_single_directory(&self, path: &Path) -> Result<BookFolder> {
+        if !path.exists() {
+            anyhow::bail!("Directory does not exist: {}", path.display());
+        }
+
+        if !path.is_dir() {
+            anyhow::bail!("Path is not a directory: {}", path.display());
+        }
+
+        // Scan the folder
+        if let Some(book) = self.scan_folder(path)? {
+            Ok(book)
+        } else {
+            anyhow::bail!("Current directory does not contain valid audiobook files");
+        }
+    }
+
     /// Scan a single folder and determine if it's an audiobook
     fn scan_folder(&self, path: &Path) -> Result<Option<BookFolder>> {
         let mut book = BookFolder::new(path.to_path_buf());

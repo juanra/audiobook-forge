@@ -14,6 +14,7 @@ pub struct Processor {
     ffmpeg: FFmpeg,
     keep_temp: bool,
     use_apple_silicon: bool,
+    enable_parallel_encoding: bool,
 }
 
 impl Processor {
@@ -23,15 +24,17 @@ impl Processor {
             ffmpeg: FFmpeg::new()?,
             keep_temp: false,
             use_apple_silicon: false,
+            enable_parallel_encoding: true,
         })
     }
 
     /// Create processor with options
-    pub fn with_options(keep_temp: bool, use_apple_silicon: bool) -> Result<Self> {
+    pub fn with_options(keep_temp: bool, use_apple_silicon: bool, enable_parallel_encoding: bool) -> Result<Self> {
         Ok(Self {
             ffmpeg: FFmpeg::new()?,
             keep_temp,
             use_apple_silicon,
+            enable_parallel_encoding,
         })
     }
 
@@ -68,16 +71,7 @@ impl Processor {
             use_copy
         );
 
-        // Step 1: Create concat file
-        let concat_file = temp_dir.join("concat.txt");
-        let file_refs: Vec<&Path> = book_folder
-            .tracks
-            .iter()
-            .map(|t| t.file_path.as_path())
-            .collect();
-        FFmpeg::create_concat_file(&file_refs, &concat_file)?;
-
-        // Step 2: Concatenate audio files
+        // Get quality profile
         let quality = book_folder
             .get_best_quality_profile(true)
             .context("No tracks found")?;
@@ -94,14 +88,99 @@ impl Processor {
                 )
                 .await
                 .context("Failed to convert audio file")?;
-        } else {
-            // Multiple files - concatenate
+        } else if use_copy {
+            // Copy mode - can concatenate directly
+            let concat_file = temp_dir.join("concat.txt");
+            let file_refs: Vec<&Path> = book_folder
+                .tracks
+                .iter()
+                .map(|t| t.file_path.as_path())
+                .collect();
+            FFmpeg::create_concat_file(&file_refs, &concat_file)?;
+
             self.ffmpeg
                 .concat_audio_files(
                     &concat_file,
                     &output_path,
                     quality,
                     use_copy,
+                    self.use_apple_silicon,
+                )
+                .await
+                .context("Failed to concatenate audio files")?;
+        } else if self.enable_parallel_encoding && book_folder.tracks.len() > 1 {
+            // Transcode mode - encode files in parallel first, then concatenate
+            tracing::info!(
+                "Using parallel encoding: {} files will be encoded concurrently",
+                book_folder.tracks.len()
+            );
+
+            // Step 1: Encode all files to AAC/M4A in parallel
+            let mut encoded_files = Vec::new();
+            let mut tasks = Vec::new();
+
+            for (i, track) in book_folder.tracks.iter().enumerate() {
+                let temp_output = temp_dir.join(format!("encoded_{:04}.m4a", i));
+                encoded_files.push(temp_output.clone());
+
+                let ffmpeg = self.ffmpeg.clone();
+                let input = track.file_path.clone();
+                let output = temp_output;
+                let quality = quality.clone();
+                let use_apple_silicon = self.use_apple_silicon;
+
+                // Spawn parallel encoding task
+                let task = tokio::spawn(async move {
+                    ffmpeg
+                        .convert_single_file(&input, &output, &quality, false, use_apple_silicon)
+                        .await
+                });
+
+                tasks.push(task);
+            }
+
+            // Wait for all encoding tasks to complete
+            for (i, task) in tasks.into_iter().enumerate() {
+                task.await
+                    .context("Task join error")?
+                    .with_context(|| format!("Failed to encode track {}", i))?;
+            }
+
+            tracing::info!("All {} files encoded, now concatenating...", encoded_files.len());
+
+            // Step 2: Concatenate the encoded files (fast, no re-encoding)
+            let concat_file = temp_dir.join("concat.txt");
+            let file_refs: Vec<&Path> = encoded_files.iter().map(|p| p.as_path()).collect();
+            FFmpeg::create_concat_file(&file_refs, &concat_file)?;
+
+            self.ffmpeg
+                .concat_audio_files(
+                    &concat_file,
+                    &output_path,
+                    quality,
+                    true, // use copy mode for concatenation
+                    self.use_apple_silicon,
+                )
+                .await
+                .context("Failed to concatenate encoded files")?;
+        } else {
+            // Serial mode - concatenate and encode in one FFmpeg call (traditional method)
+            tracing::info!("Using serial encoding (parallel encoding disabled in config)");
+
+            let concat_file = temp_dir.join("concat.txt");
+            let file_refs: Vec<&Path> = book_folder
+                .tracks
+                .iter()
+                .map(|t| t.file_path.as_path())
+                .collect();
+            FFmpeg::create_concat_file(&file_refs, &concat_file)?;
+
+            self.ffmpeg
+                .concat_audio_files(
+                    &concat_file,
+                    &output_path,
+                    quality,
+                    false, // transcode mode
                     self.use_apple_silicon,
                 )
                 .await
