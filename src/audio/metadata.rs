@@ -1,6 +1,6 @@
 //! Audio metadata extraction and manipulation
 
-use crate::models::Track;
+use crate::models::{Track, AudibleMetadata};
 use anyhow::{Context, Result};
 use id3::TagLike;
 use std::path::Path;
@@ -91,6 +91,83 @@ pub async fn inject_metadata_atomicparsley(
         cmd.args(&["--artwork", &cover.display().to_string()]);
     }
 
+    cmd.args(&["--overWrite"]);
+
+    let output = cmd
+        .output()
+        .await
+        .context("Failed to execute AtomicParsley")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("AtomicParsley failed: {}", stderr);
+    }
+
+    Ok(())
+}
+
+/// Inject Audible metadata into M4B file
+pub async fn inject_audible_metadata(
+    file_path: &Path,
+    audible: &AudibleMetadata,
+    cover_art: Option<&Path>,
+) -> Result<()> {
+    let mut cmd = tokio::process::Command::new("AtomicParsley");
+    cmd.arg(file_path);
+
+    // Title (with subtitle if present)
+    let full_title = if let Some(subtitle) = &audible.subtitle {
+        format!("{}: {}", audible.title, subtitle)
+    } else {
+        audible.title.clone()
+    };
+    cmd.args(&["--title", &full_title]);
+
+    // Album (use title for audiobooks)
+    cmd.args(&["--album", &audible.title]);
+
+    // Artist (primary author)
+    if let Some(author) = audible.primary_author() {
+        cmd.args(&["--artist", author]);
+        cmd.args(&["--albumArtist", author]);
+    }
+
+    // Narrator as composer (audiobook convention)
+    if let Some(narrator) = audible.primary_narrator() {
+        cmd.args(&["--composer", narrator]);
+    }
+
+    // Description as comment
+    if let Some(desc) = &audible.description {
+        // Limit description length to avoid issues with AtomicParsley
+        let truncated_desc = if desc.len() > 4000 {
+            format!("{}...", &desc[..4000])
+        } else {
+            desc.clone()
+        };
+        cmd.args(&["--comment", &truncated_desc]);
+    }
+
+    // Year
+    if let Some(year) = audible.published_year {
+        cmd.args(&["--year", &year.to_string()]);
+    }
+
+    // Genre (first genre)
+    if let Some(genre) = audible.genres.first() {
+        cmd.args(&["--genre", genre]);
+    }
+
+    // Cover art
+    if let Some(cover_path) = cover_art {
+        cmd.args(&["--artwork", &cover_path.display().to_string()]);
+    }
+
+    // Additional metadata as custom tags
+    // Store ASIN as custom field
+    cmd.args(&["--comment", &format!("ASIN: {}", audible.asin)]);
+
+    // Overwrite
     cmd.args(&["--overWrite"]);
 
     let output = cmd

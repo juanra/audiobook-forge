@@ -119,12 +119,22 @@ mod tests {
         let analyzer = Analyzer::new().unwrap();
         let mut book = BookFolder::new(PathBuf::from("/test"));
 
-        let quality = QualityProfile::new(128, 44100, 2, "mp3".to_string(), 3600.0).unwrap();
+        // Test with AAC/M4A files (can use copy mode)
+        let aac_quality = QualityProfile::new(128, 44100, 2, "aac".to_string(), 3600.0).unwrap();
         book.tracks = vec![
-            Track::new(PathBuf::from("1.mp3"), quality.clone()),
-            Track::new(PathBuf::from("2.mp3"), quality),
+            Track::new(PathBuf::from("1.m4a"), aac_quality.clone()),
+            Track::new(PathBuf::from("2.m4a"), aac_quality),
         ];
 
         assert!(analyzer.can_use_copy_mode(&book));
+
+        // Test with MP3 files (cannot use copy mode - must transcode)
+        let mp3_quality = QualityProfile::new(128, 44100, 2, "mp3".to_string(), 3600.0).unwrap();
+        book.tracks = vec![
+            Track::new(PathBuf::from("1.mp3"), mp3_quality.clone()),
+            Track::new(PathBuf::from("2.mp3"), mp3_quality),
+        ];
+
+        assert!(!analyzer.can_use_copy_mode(&book));
     }
 }

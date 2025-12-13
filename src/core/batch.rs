@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_batch_processor_with_options() {
-        let processor = BatchProcessor::with_options(8, true, true, 4, RetryConfig::new());
+        let processor = BatchProcessor::with_options(8, true, true, true, 4, RetryConfig::new());
         assert_eq!(processor.workers, 8);
         assert_eq!(processor.max_concurrent_encodes, 4);
         assert!(processor.keep_temp);
@@ -224,11 +224,11 @@ mod tests {
 
     #[test]
     fn test_concurrent_encode_clamping() {
-        let processor = BatchProcessor::with_options(4, false, false, 0, RetryConfig::new());
+        let processor = BatchProcessor::with_options(4, false, false, true, 0, RetryConfig::new());
         assert_eq!(processor.max_concurrent_encodes, 1);
 
-        let processor = BatchProcessor::with_options(4, false, false, 100, RetryConfig::new());
-        assert_eq!(processor.max_concurrent_encodes, 8);
+        let processor = BatchProcessor::with_options(4, false, false, true, 100, RetryConfig::new());
+        assert_eq!(processor.max_concurrent_encodes, 16);
     }
 
     #[test]

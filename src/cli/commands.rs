@@ -44,6 +44,10 @@ pub enum Commands {
     #[command(subcommand)]
     Config(ConfigCommands),
 
+    /// Fetch and manage Audible metadata
+    #[command(subcommand)]
+    Metadata(MetadataCommands),
+
     /// Check system dependencies
     Check,
 
@@ -109,6 +113,18 @@ pub struct BuildArgs {
     #[arg(long)]
     pub use_apple_silicon_encoder: Option<bool>,
 
+    /// Fetch metadata from Audible during build
+    #[arg(long)]
+    pub fetch_audible: bool,
+
+    /// Audible region (us, uk, ca, au, fr, de, jp, it, in, es)
+    #[arg(long)]
+    pub audible_region: Option<String>,
+
+    /// Auto-match books with Audible by folder name
+    #[arg(long)]
+    pub audible_auto_match: bool,
+
     /// Configuration file path
     #[arg(long)]
     pub config: Option<PathBuf>,
@@ -159,6 +175,51 @@ pub enum ConfigCommands {
     Edit,
 }
 
+#[derive(Subcommand)]
+pub enum MetadataCommands {
+    /// Fetch metadata from Audible
+    Fetch {
+        /// Audible ASIN (B002V5D7RU format)
+        #[arg(long)]
+        asin: Option<String>,
+
+        /// Search by title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// Search by author
+        #[arg(long)]
+        author: Option<String>,
+
+        /// Audible region (us, uk, ca, au, fr, de, jp, it, in, es)
+        #[arg(long, default_value = "us")]
+        region: String,
+
+        /// Save metadata to JSON file
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Enrich M4B file with Audible metadata
+    Enrich {
+        /// M4B file to enrich
+        #[arg(long)]
+        file: PathBuf,
+
+        /// Audible ASIN
+        #[arg(long)]
+        asin: Option<String>,
+
+        /// Auto-detect ASIN from filename
+        #[arg(long)]
+        auto_detect: bool,
+
+        /// Audible region
+        #[arg(long, default_value = "us")]
+        region: String,
+    },
+}
+
 /// Run the CLI application
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
@@ -177,6 +238,7 @@ pub fn run() -> Result<()> {
         Commands::Build(args) => run_build(args),
         Commands::Organize(args) => run_organize(args),
         Commands::Config(cmd) => run_config(cmd),
+        Commands::Metadata(cmd) => run_metadata(cmd),
         Commands::Check => run_check(),
         Commands::Version => run_version(),
     }
@@ -293,6 +355,18 @@ fn run_check() -> Result<()> {
 
         anyhow::bail!("Missing required dependencies");
     }
+}
+
+fn run_metadata(cmd: MetadataCommands) -> Result<()> {
+    use crate::cli::handlers::handle_metadata;
+    use crate::utils::ConfigManager;
+
+    // Load config
+    let config = ConfigManager::load_or_default(None)?;
+
+    // Run async handler
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(handle_metadata(cmd, config))
 }
 
 fn run_version() -> Result<()> {

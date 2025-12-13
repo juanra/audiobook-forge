@@ -1,6 +1,6 @@
 //! Audiobook folder model
 
-use super::{QualityProfile, Track};
+use super::{QualityProfile, Track, AudibleMetadata};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -54,6 +54,10 @@ pub struct BookFolder {
     pub cover_file: Option<PathBuf>,
     /// CUE file path (if present)
     pub cue_file: Option<PathBuf>,
+    /// Audible metadata (if fetched)
+    pub audible_metadata: Option<AudibleMetadata>,
+    /// Detected ASIN from folder name or metadata
+    pub detected_asin: Option<String>,
 }
 
 impl BookFolder {
@@ -74,6 +78,8 @@ impl BookFolder {
             m4b_files: Vec::new(),
             cover_file: None,
             cue_file: None,
+            audible_metadata: None,
+            detected_asin: None,
         }
     }
 
@@ -234,14 +240,26 @@ mod tests {
     fn test_can_use_concat_copy() {
         let mut book = BookFolder::new(PathBuf::from("/path/to/book"));
 
-        let quality1 = QualityProfile::new(128, 44100, 2, "mp3".to_string(), 3600.0).unwrap();
-        let quality2 = QualityProfile::new(128, 44100, 2, "mp3".to_string(), 1800.0).unwrap();
+        // Test with AAC/M4A files (can use concat copy)
+        let quality1 = QualityProfile::new(128, 44100, 2, "aac".to_string(), 3600.0).unwrap();
+        let quality2 = QualityProfile::new(128, 44100, 2, "aac".to_string(), 1800.0).unwrap();
 
         book.tracks = vec![
-            Track::new(PathBuf::from("1.mp3"), quality1),
-            Track::new(PathBuf::from("2.mp3"), quality2),
+            Track::new(PathBuf::from("1.m4a"), quality1),
+            Track::new(PathBuf::from("2.m4a"), quality2),
         ];
 
         assert!(book.can_use_concat_copy());
+
+        // Test with MP3 files (cannot use concat copy - must transcode)
+        let mp3_quality1 = QualityProfile::new(128, 44100, 2, "mp3".to_string(), 3600.0).unwrap();
+        let mp3_quality2 = QualityProfile::new(128, 44100, 2, "mp3".to_string(), 1800.0).unwrap();
+
+        book.tracks = vec![
+            Track::new(PathBuf::from("1.mp3"), mp3_quality1),
+            Track::new(PathBuf::from("2.mp3"), mp3_quality2),
+        ];
+
+        assert!(!book.can_use_concat_copy());
     }
 }

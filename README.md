@@ -77,6 +77,12 @@ When downloading audiobooks, they often come as **multiple separate MP3 files** 
 - **🎯 Smart Quality Detection**: Automatically detects and preserves the best audio quality
 - **📖 Chapter Generation**: Multiple sources (files, CUE sheets, auto-detection)
 - **🎨 Metadata Management**: Extracts and enhances metadata from ID3 and M4A tags
+- **🎧 Audible Metadata Integration** (NEW in v2.2.0): Fetch comprehensive metadata from Audible's catalog
+  - Automatic ASIN detection from folder names
+  - 10 regional stores (US, CA, UK, AU, FR, DE, JP, IT, IN, ES)
+  - High-quality cover art download
+  - Smart caching (7-day default TTL)
+  - Rate-limited API integration
 - **🖼️ Cover Art**: Automatically detects and embeds cover images
 - **🔄 Batch Operations**: Process entire libraries with a single command
 - **⚡ Copy Mode**: Ultra-fast concatenation without re-encoding when possible
@@ -208,6 +214,55 @@ audiobook-forge organize [OPTIONS] --root <PATH>
 - `--root <PATH>` - Root directory to organize (required)
 - `--dry-run` - Show what would be done without making changes
 - `-v, --verbose` - Verbose logging
+
+#### `metadata` - Fetch and manage Audible metadata (NEW in v2.2.0)
+
+```bash
+audiobook-forge metadata <SUBCOMMAND>
+```
+
+**Subcommands:**
+
+**`fetch`** - Fetch metadata from Audible
+```bash
+audiobook-forge metadata fetch [OPTIONS]
+```
+- `--asin <ASIN>` - Audible ASIN (e.g., B00B5HZGUG)
+- `--title <TITLE>` - Search by title
+- `--author <AUTHOR>` - Search by author
+- `--region <REGION>` - Audible region: us, uk, ca, au, fr, de, jp, it, in, es (default: us)
+- `--output <PATH>` - Save metadata to JSON file
+
+**`enrich`** - Enrich M4B file with Audible metadata
+```bash
+audiobook-forge metadata enrich [OPTIONS]
+```
+- `--file <PATH>` - M4B file to enrich
+- `--asin <ASIN>` - Audible ASIN
+- `--auto-detect` - Auto-detect ASIN from filename
+- `--region <REGION>` - Audible region (default: us)
+
+**Build Integration:**
+- `--fetch-audible` - Enable Audible metadata fetching during build
+- `--audible-region <REGION>` - Specify Audible region for build
+- `--audible-auto-match` - Auto-match books by folder name
+
+**Examples:**
+```bash
+# Fetch by ASIN
+audiobook-forge metadata fetch --asin B00B5HZGUG
+
+# Search by title/author
+audiobook-forge metadata fetch --title "The Martian" --author "Andy Weir"
+
+# Enrich existing M4B
+audiobook-forge metadata enrich --file book.m4b --asin B00B5HZGUG
+
+# Auto-fetch during build
+audiobook-forge build --root /audiobooks --fetch-audible --audible-region us
+```
+
+See [AUDIBLE_METADATA.md](AUDIBLE_METADATA.md) for comprehensive documentation.
 
 #### `config` - Manage configuration
 
@@ -452,7 +507,90 @@ audiobook-forge organize --root /audiobooks
 
 ---
 
-#### Example 5: Configuration Management
+#### Example 5: Fetch Audible Metadata (NEW in v2.2.0)
+
+**Fetch metadata by ASIN:**
+
+```bash
+audiobook-forge metadata fetch --asin B00B5HZGUG
+```
+
+**Output:**
+
+```
+→ Fetching Audible metadata...
+  → Looking up ASIN: B00B5HZGUG
+
+============================================================
+Title: The Martian
+Subtitle: null
+Author(s): Andy Weir
+Narrator(s): R. C. Bray
+Publisher: Podium Publishing
+Published: 2013
+Duration: 10h 53m
+Language: english
+Genres: Science Fiction & Fantasy
+ASIN: B00B5HZGUG
+============================================================
+```
+
+**Search by title and author:**
+
+```bash
+audiobook-forge metadata fetch --title "Project Hail Mary" --author "Andy Weir" --region us
+```
+
+**Enrich existing M4B file:**
+
+```bash
+# With explicit ASIN
+audiobook-forge metadata enrich --file "The Martian.m4b" --asin B00B5HZGUG
+
+# Auto-detect ASIN from filename (e.g., "The Martian [B00B5HZGUG].m4b")
+audiobook-forge metadata enrich --file "The Martian [B00B5HZGUG].m4b" --auto-detect
+```
+
+**Auto-fetch during build (recommended workflow):**
+
+```bash
+# Rename folders with ASINs for automatic detection
+# Format: Book Title [B00G3L6JMS]
+
+cd /audiobooks
+mv "The Martian" "The Martian [B00B5HZGUG]"
+mv "Project Hail Mary" "Project Hail Mary [B00G3L6JMS]"
+
+# Build with Audible metadata
+audiobook-forge build --root /audiobooks --fetch-audible --audible-region us
+```
+
+**Output:**
+
+```
+→ Scanning audiobooks in: /audiobooks
+✓ Found 2 audiobook(s)
+
+→ Analyzing tracks...
+✓ Analysis complete
+
+→ Fetching Audible metadata...
+  ✓ The Martian (ASIN: B00B5HZGUG)
+  ✓ Project Hail Mary (ASIN: B00G3L6JMS)
+✓ Fetched metadata for 2/2 books
+
+→ Processing 2 audiobook(s)...
+  ✓ The Martian (32.1s, transcode)
+  ✓ Project Hail Mary (28.5s, transcode)
+
+✓ Batch complete: 2 successful, 0 failed
+```
+
+See [AUDIBLE_METADATA.md](AUDIBLE_METADATA.md) for comprehensive documentation on ASIN detection, regional stores, caching, and troubleshooting.
+
+---
+
+#### Example 6: Configuration Management
 
 **Initialize config:**
 
@@ -553,6 +691,16 @@ metadata:
   extract_from_files: true   # Extract metadata from audio files
   prefer_embedded: true      # Prefer embedded tags over filenames
   fallback_to_folder_name: true  # Use folder name as fallback
+  default_language: "en"     # Default language code
+
+  # Audible Metadata Integration (NEW in v2.2.0)
+  audible:
+    enabled: false           # Enable automatic fetching during build
+    region: "us"             # Audible region: us, ca, uk, au, fr, de, jp, it, in, es
+    auto_match: false        # Auto-match books by folder name (may have false positives)
+    download_covers: true    # Download and embed cover art from Audible
+    cache_duration_hours: 168  # Cache metadata for 7 days (0 = no cache)
+    rate_limit_per_minute: 100 # API rate limit (do not exceed 100)
 
 # Advanced Settings
 advanced:
@@ -639,6 +787,11 @@ My Audiobook/
 
 ### Metadata Sources
 
+- **Audible** (NEW in v2.2.0) - Comprehensive metadata from Audible's catalog via Audnexus API
+  - Title, subtitle, authors, narrators, publisher, year
+  - Description, language, duration, series information
+  - Genres, tags, ISBN, customer ratings
+  - High-quality cover artwork
 - **ID3 tags** (MP3 files)
 - **M4A atoms** (M4A/M4B files)
 - **CUE sheets** (`.cue` files)
@@ -781,12 +934,97 @@ cargo install audiobook-forge --force
 
 ---
 
+#### Audible Metadata Issues (NEW in v2.2.0)
+
+**No metadata found:**
+
+**Error:**
+```
+No results found for search query
+```
+
+**Solutions:**
+```bash
+# Try different search terms (partial titles work better)
+audiobook-forge metadata fetch --title "Hail Mary" --author "Weir"
+
+# Use ASIN directly (more reliable)
+audiobook-forge metadata fetch --asin B00G3L6JMS
+
+# Try different region
+audiobook-forge metadata fetch --title "Book" --region uk
+
+# Check spelling of author/title
+```
+
+---
+
+**ASIN not detected:**
+
+**Issue:** Folder has ASIN but not auto-detected
+
+**Solutions:**
+```bash
+# Ensure ASIN format is correct: B + 9 alphanumeric characters
+# Supported formats:
+#   ✓ "Book Title [B00G3L6JMS]"
+#   ✓ "B00G3L6JMS - Book Title"
+#   ✓ "Book - B00G3L6JMS - Author"
+
+# Use explicit ASIN instead
+audiobook-forge metadata fetch --asin B00G3L6JMS
+
+# Or use auto-detect on filename
+audiobook-forge metadata enrich --file "Book [B00G3L6JMS].m4b" --auto-detect
+```
+
+---
+
+**API rate limiting:**
+
+**Issue:** Too many requests
+
+**Solution:**
+```yaml
+# In config.yaml, reduce rate limit or wait a few minutes
+metadata:
+  audible:
+    rate_limit_per_minute: 50  # Reduce from 100
+
+# Or process in smaller batches
+```
+
+---
+
+**Cache issues:**
+
+**Issue:** Stale or corrupted cache data
+
+**Solution:**
+```bash
+# Clear cache for specific ASIN
+rm ~/.cache/audiobook-forge/audible/B00G3L6JMS.json
+
+# Clear entire cache
+rm -rf ~/.cache/audiobook-forge/audible/
+
+# Or disable caching temporarily in config.yaml
+metadata:
+  audible:
+    cache_duration_hours: 0  # Disable cache
+```
+
+See [AUDIBLE_METADATA.md](AUDIBLE_METADATA.md) for comprehensive troubleshooting and advanced usage.
+
+---
+
 ### Getting Help
 
 - **Check logs**: Run with `--verbose` flag for detailed output
 - **Verify dependencies**: `audiobook-forge check`
 - **Report issues**: [GitHub Issues](https://github.com/juanra/audiobook-forge/issues)
 - **Documentation**: See `docs/` folder for detailed guides
+- **Audible metadata**: See [AUDIBLE_METADATA.md](AUDIBLE_METADATA.md) for comprehensive documentation
 
 ---
 

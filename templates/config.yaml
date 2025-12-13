@@ -59,6 +59,31 @@ metadata:
     - "cover.png"
     - "folder.png"
 
+  # Audible metadata integration
+  audible:
+    # Enable automatic Audible metadata fetching during build
+    enabled: false
+
+    # Default Audible region for metadata queries
+    # Options: us, ca, uk, au, fr, de, jp, it, in, es
+    region: "us"
+
+    # Auto-match books by folder name (may have false positives)
+    # When enabled, will search Audible using the folder name if no ASIN is detected
+    auto_match: false
+
+    # Download and embed cover art from Audible
+    # When enabled, replaces local covers with high-quality Audible artwork
+    download_covers: true
+
+    # Cache metadata locally (in hours, 0 = no cache)
+    # Cached metadata is stored in ~/.cache/audiobook-forge/audible/
+    cache_duration_hours: 168  # 7 days
+
+    # API rate limit (requests per minute)
+    # Do not exceed 100 to respect Audnexus API limits
+    rate_limit_per_minute: 100
+
 # ============================================================================
 # ORGANIZATION
 # ============================================================================

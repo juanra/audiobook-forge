@@ -16,6 +16,11 @@ clap = { version = "4.5", features = ["derive", "cargo", "wrap_help"] }
 tokio = { version = "1.35", features = ["full"] }
 tokio-stream = "0.1"
 
+# HTTP client for Audible API integration
+reqwest = { version = "0.11", features = ["json"] }
+governor = "0.6"
+lazy_static = "1.4"
+
 # Progress bars and terminal UI
 indicatif = "0.17"
 console = "0.15"

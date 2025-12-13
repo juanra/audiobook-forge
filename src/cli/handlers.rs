@@ -1,12 +1,14 @@
 //! CLI command handlers
 
-use crate::cli::commands::{BuildArgs, ConfigCommands, OrganizeArgs};
+use crate::cli::commands::{BuildArgs, ConfigCommands, OrganizeArgs, MetadataCommands};
 use crate::core::{Analyzer, BatchProcessor, Organizer, RetryConfig, Scanner};
-use crate::models::Config;
-use crate::utils::{ConfigManager, DependencyChecker};
-use anyhow::{Context, Result};
+use crate::models::{Config, AudibleRegion};
+use crate::utils::{ConfigManager, DependencyChecker, AudibleCache};
+use crate::audio::{AudibleClient, detect_asin};
+use anyhow::{Context, Result, bail};
 use console::style;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 /// Try to detect if current directory is an audiobook folder
 fn try_detect_current_as_audiobook() -> Result<Option<PathBuf>> {
@@ -139,6 +141,105 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     }
 
     println!("{} Analysis complete", style("✓").green());
+
+    // Fetch Audible metadata if enabled
+    if args.fetch_audible || config.metadata.audible.enabled {
+        println!("\n{} Fetching Audible metadata...", style("→").cyan());
+
+        let audible_region = args.audible_region
+            .as_deref()
+            .or(Some(&config.metadata.audible.region))
+            .and_then(|r| AudibleRegion::from_str(r).ok())
+            .unwrap_or(AudibleRegion::US);
+
+        let client = AudibleClient::with_rate_limit(
+            audible_region,
+            config.metadata.audible.rate_limit_per_minute
+        )?;
+        let cache = AudibleCache::with_ttl_hours(config.metadata.audible.cache_duration_hours)?;
+
+        for book in &mut book_folders {
+            // Try ASIN detection first
+            if let Some(asin) = detect_asin(&book.name) {
+                tracing::debug!("Detected ASIN {} in folder: {}", asin, book.name);
+                book.detected_asin = Some(asin.clone());
+
+                // Try cache first
+                match cache.get(&asin).await {
+                    Some(cached) => {
+                        book.audible_metadata = Some(cached);
+                        println!("  {} {} (ASIN: {}, cached)", style("✓").green(), book.name, asin);
+                    }
+                    None => {
+                        // Fetch from API
+                        match client.fetch_by_asin(&asin).await {
+                            Ok(metadata) => {
+                                // Cache the result
+                                let _ = cache.set(&asin, &metadata).await;
+                                book.audible_metadata = Some(metadata);
+                                println!("  {} {} (ASIN: {})", style("✓").green(), book.name, asin);
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to fetch metadata for {}: {}", book.name, e);
+                                println!("  {} {} - fetch failed", style("⚠").yellow(), book.name);
+                            }
+                        }
+                    }
+                }
+            } else if args.audible_auto_match || config.metadata.audible.auto_match {
+                // Try auto-matching by title
+                tracing::debug!("Attempting auto-match for: {}", book.name);
+
+                match client.search(Some(&book.name), None).await {
+                    Ok(results) if !results.is_empty() => {
+                        let asin = &results[0].asin;
+                        tracing::debug!("Auto-matched {} to ASIN: {}", book.name, asin);
+                        book.detected_asin = Some(asin.clone());
+
+                        // Try cache first
+                        match cache.get(asin).await {
+                            Some(cached) => {
+                                book.audible_metadata = Some(cached);
+                                println!("  {} {} (matched: {}, cached)", style("✓").green(), book.name, asin);
+                            }
+                            None => {
+                                // Fetch from API
+                                match client.fetch_by_asin(asin).await {
+                                    Ok(metadata) => {
+                                        // Cache the result
+                                        let _ = cache.set(asin, &metadata).await;
+                                        book.audible_metadata = Some(metadata);
+                                        println!("  {} {} (matched: {})", style("✓").green(), book.name, asin);
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("Failed to fetch metadata after match for {}: {}", book.name, e);
+                                        println!("  {} {} - fetch failed", style("⚠").yellow(), book.name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Ok(_) => {
+                        tracing::debug!("No Audible match found for: {}", book.name);
+                        println!("  {} {} - no match found", style("○").dim(), book.name);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Search failed for {}: {}", book.name, e);
+                        println!("  {} {} - search failed", style("⚠").yellow(), book.name);
+                    }
+                }
+            } else {
+                tracing::debug!("No ASIN detected and auto-match disabled for: {}", book.name);
+            }
+        }
+
+        let fetched_count = book_folders.iter().filter(|b| b.audible_metadata.is_some()).count();
+        println!("{} Fetched metadata for {}/{} books",
+            style("✓").green(),
+            style(fetched_count).cyan(),
+            book_folders.len()
+        );
+    }
 
     // Determine output directory
     let output_dir = if auto_detected {
@@ -433,4 +534,198 @@ pub fn handle_check() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Handle the metadata command
+pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Result<()> {
+    match command {
+        MetadataCommands::Fetch { asin, title, author, region, output } => {
+            println!("{} Fetching Audible metadata...", style("→").cyan());
+
+            // Parse region
+            let audible_region = AudibleRegion::from_str(&region)
+                .unwrap_or(AudibleRegion::US);
+
+            // Create client and cache
+            let client = AudibleClient::with_rate_limit(
+                audible_region,
+                config.metadata.audible.rate_limit_per_minute
+            )?;
+            let cache = AudibleCache::with_ttl_hours(config.metadata.audible.cache_duration_hours)?;
+
+            // Fetch metadata
+            let metadata = if let Some(asin_val) = asin {
+                // Direct ASIN lookup
+                println!("  {} Looking up ASIN: {}", style("→").cyan(), asin_val);
+
+                // Try cache first
+                if let Some(cached) = cache.get(&asin_val).await {
+                    println!("  {} Using cached metadata", style("✓").green());
+                    cached
+                } else {
+                    let fetched = client.fetch_by_asin(&asin_val).await?;
+                    cache.set(&asin_val, &fetched).await?;
+                    fetched
+                }
+            } else if title.is_some() || author.is_some() {
+                // Search by title/author
+                println!("  {} Searching: title={:?}, author={:?}",
+                    style("→").cyan(), title, author);
+
+                let results = client.search(title.as_deref(), author.as_deref()).await?;
+
+                if results.is_empty() {
+                    bail!("No results found for search query");
+                }
+
+                // Display search results
+                println!("\n{} Found {} result(s):", style("✓").green(), results.len());
+                for (i, result) in results.iter().enumerate().take(5) {
+                    println!("  {}. {} by {}",
+                        i + 1,
+                        style(&result.title).yellow(),
+                        style(result.authors.join(", ")).cyan()
+                    );
+                }
+
+                // Fetch first result
+                println!("\n{} Fetching details for first result...", style("→").cyan());
+                let asin_to_fetch = &results[0].asin;
+
+                if let Some(cached) = cache.get(asin_to_fetch).await {
+                    cached
+                } else {
+                    let fetched = client.fetch_by_asin(asin_to_fetch).await?;
+                    cache.set(asin_to_fetch, &fetched).await?;
+                    fetched
+                }
+            } else {
+                bail!("Must provide --asin or --title/--author");
+            };
+
+            // Display metadata
+            println!("\n{}", style("=".repeat(60)).dim());
+            println!("{}: {}", style("Title").bold(), metadata.title);
+            if let Some(subtitle) = &metadata.subtitle {
+                println!("{}: {}", style("Subtitle").bold(), subtitle);
+            }
+            if !metadata.authors.is_empty() {
+                println!("{}: {}", style("Author(s)").bold(), metadata.authors_string());
+            }
+            if !metadata.narrators.is_empty() {
+                println!("{}: {}", style("Narrator(s)").bold(), metadata.narrators_string());
+            }
+            if let Some(publisher) = &metadata.publisher {
+                println!("{}: {}", style("Publisher").bold(), publisher);
+            }
+            if let Some(year) = metadata.published_year {
+                println!("{}: {}", style("Published").bold(), year);
+            }
+            if let Some(duration_min) = metadata.runtime_minutes() {
+                let hours = duration_min / 60;
+                let mins = duration_min % 60;
+                println!("{}: {}h {}m", style("Duration").bold(), hours, mins);
+            }
+            if let Some(lang) = &metadata.language {
+                println!("{}: {}", style("Language").bold(), lang);
+            }
+            if !metadata.genres.is_empty() {
+                println!("{}: {}", style("Genres").bold(), metadata.genres.join(", "));
+            }
+            if !metadata.series.is_empty() {
+                for series in &metadata.series {
+                    let seq_info = if let Some(seq) = &series.sequence {
+                        format!(" (Book {})", seq)
+                    } else {
+                        String::new()
+                    };
+                    println!("{}: {}{}", style("Series").bold(), series.name, seq_info);
+                }
+            }
+            println!("{}: {}", style("ASIN").bold(), metadata.asin);
+            println!("{}", style("=".repeat(60)).dim());
+
+            // Save to file if requested
+            if let Some(output_path) = output {
+                let json = serde_json::to_string_pretty(&metadata)?;
+                std::fs::write(&output_path, json)?;
+                println!("\n{} Saved metadata to: {}",
+                    style("✓").green(),
+                    style(output_path.display()).yellow()
+                );
+            }
+
+            Ok(())
+        }
+
+        MetadataCommands::Enrich { file, asin, auto_detect, region } => {
+            println!("{} Enriching M4B file with Audible metadata...", style("→").cyan());
+
+            if !file.exists() {
+                bail!("File does not exist: {}", file.display());
+            }
+
+            // Detect or use provided ASIN
+            let asin_to_use = if let Some(asin_val) = asin {
+                asin_val
+            } else if auto_detect {
+                detect_asin(&file.display().to_string())
+                    .ok_or_else(|| anyhow::anyhow!("Could not detect ASIN from filename: {}", file.display()))?
+            } else {
+                bail!("Must provide --asin or use --auto-detect");
+            };
+
+            println!("  {} Using ASIN: {}", style("→").cyan(), asin_to_use);
+
+            // Parse region
+            let audible_region = AudibleRegion::from_str(&region)
+                .unwrap_or(AudibleRegion::US);
+
+            // Create client and cache
+            let client = AudibleClient::with_rate_limit(
+                audible_region,
+                config.metadata.audible.rate_limit_per_minute
+            )?;
+            let cache = AudibleCache::with_ttl_hours(config.metadata.audible.cache_duration_hours)?;
+
+            // Fetch metadata
+            let metadata = if let Some(cached) = cache.get(&asin_to_use).await {
+                println!("  {} Using cached metadata", style("✓").green());
+                cached
+            } else {
+                println!("  {} Fetching from Audible...", style("→").cyan());
+                let fetched = client.fetch_by_asin(&asin_to_use).await?;
+                cache.set(&asin_to_use, &fetched).await?;
+                fetched
+            };
+
+            println!("  {} Found: {}", style("✓").green(), metadata.title);
+
+            // Download cover if available and enabled
+            let cover_path = if config.metadata.audible.download_covers {
+                if let Some(cover_url) = &metadata.cover_url {
+                    println!("  {} Downloading cover art...", style("→").cyan());
+                    let temp_cover = std::env::temp_dir().join(format!("{}.jpg", asin_to_use));
+                    client.download_cover(cover_url, &temp_cover).await?;
+                    println!("  {} Cover downloaded", style("✓").green());
+                    Some(temp_cover)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // Inject metadata (this will be implemented in metadata.rs)
+            println!("  {} Injecting metadata...", style("→").cyan());
+            crate::audio::inject_audible_metadata(&file, &metadata, cover_path.as_deref()).await?;
+
+            println!("\n{} Successfully enriched: {}",
+                style("✓").green(),
+                style(file.display()).yellow()
+            );
+
+            Ok(())
+        }
+    }
 }

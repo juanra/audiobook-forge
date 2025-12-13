@@ -200,6 +200,9 @@ pub struct MetadataConfig {
     /// Cover art filenames to search for
     #[serde(default = "default_cover_filenames")]
     pub cover_filenames: Vec<String>,
+    /// Audible metadata integration
+    #[serde(default)]
+    pub audible: AudibleConfig,
 }
 
 impl Default for MetadataConfig {
@@ -212,6 +215,7 @@ impl Default for MetadataConfig {
                 "cover.png".to_string(),
                 "folder.png".to_string(),
             ],
+            audible: AudibleConfig::default(),
         }
     }
 }
@@ -227,6 +231,54 @@ fn default_cover_filenames() -> Vec<String> {
         "cover.png".to_string(),
         "folder.png".to_string(),
     ]
+}
+
+/// Audible metadata integration configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudibleConfig {
+    /// Enable Audible metadata fetching
+    #[serde(default)]
+    pub enabled: bool,
+    /// Default Audible region for queries
+    #[serde(default = "default_audible_region")]
+    pub region: String,
+    /// Auto-match books by folder name during build
+    #[serde(default)]
+    pub auto_match: bool,
+    /// Download and embed cover art from Audible
+    #[serde(default = "default_true")]
+    pub download_covers: bool,
+    /// Cache metadata locally (hours, 0 = no cache)
+    #[serde(default = "default_cache_duration")]
+    pub cache_duration_hours: u64,
+    /// Rate limit (requests per minute)
+    #[serde(default = "default_rate_limit")]
+    pub rate_limit_per_minute: u32,
+}
+
+impl Default for AudibleConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            region: "us".to_string(),
+            auto_match: false,
+            download_covers: true,
+            cache_duration_hours: 168, // 7 days
+            rate_limit_per_minute: 100,
+        }
+    }
+}
+
+fn default_audible_region() -> String {
+    "us".to_string()
+}
+
+fn default_cache_duration() -> u64 {
+    168 // 7 days
+}
+
+fn default_rate_limit() -> u32 {
+    100
 }
 
 /// Organization configuration

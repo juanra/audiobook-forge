@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn test_processor_with_options() {
-        let processor = Processor::with_options(true, true).unwrap();
+        let processor = Processor::with_options(true, true, true).unwrap();
         assert!(processor.keep_temp);
         assert!(processor.use_apple_silicon);
     }

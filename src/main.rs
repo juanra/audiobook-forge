@@ -1,7 +1,7 @@
 //! Audiobook Forge CLI entry point
 
 use anyhow::Result;
-use audiobook_forge::cli::{handle_build, handle_check, handle_config, handle_organize, Cli, Commands};
+use audiobook_forge::cli::{handle_build, handle_check, handle_config, handle_organize, handle_metadata, Cli, Commands};
 use audiobook_forge::utils::ConfigManager;
 use audiobook_forge::VERSION;
 use clap::Parser;
@@ -30,6 +30,10 @@ async fn main() -> Result<()> {
 
         Commands::Config(command) => {
             handle_config(command)?;
+        }
+
+        Commands::Metadata(command) => {
+            handle_metadata(command, config).await?;
         }
 
         Commands::Check => {
