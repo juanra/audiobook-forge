@@ -6,7 +6,18 @@ authors = ["Audiobook Forge Contributors"]
 license = "MIT"
 description = "CLI tool for converting audiobook directories to M4B format with chapters and metadata"
 readme = "README.md"
+homepage = "https://github.com/juanra/audiobook-forge"
+repository = "https://github.com/juanra/audiobook-forge"
+documentation = "https://github.com/juanra/audiobook-forge/blob/main/README.md"
 keywords = ["audiobook", "m4b", "ffmpeg", "cli", "audio"]
+categories = ["command-line-utilities", "multimedia::audio", "multimedia::encoding"]
+exclude = [
+    ".git*",
+    ".DS_Store",
+    "tests/fixtures/",
+    "docs/",
+    "*.log",
+]
 
 [dependencies]
 # CLI framework
