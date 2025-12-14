@@ -21,6 +21,7 @@ fn natural_compare(a: &Path, b: &Path) -> Ordering {
 }
 
 /// Sort strings using natural ordering
+#[allow(dead_code)]  // Utility function for future use
 pub fn natural_sort_strings(strings: &mut [String]) {
     strings.sort_by(|a, b| natord::compare(a, b));
 }

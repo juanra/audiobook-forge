@@ -8,7 +8,7 @@ use std::num::NonZeroU32;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::models::{AudibleMetadata, AudibleRegion, AudibleSearchResult, AudibleAuthor, AudibleSeries};
+use crate::models::{AudibleMetadata, AudibleRegion, AudibleAuthor, AudibleSeries};
 
 const AUDNEXUS_BASE_URL: &str = "https://api.audnex.us";
 const DEFAULT_TIMEOUT_SECS: u64 = 10;
@@ -76,8 +76,9 @@ impl AudibleClient {
         Ok(convert_audnexus_to_metadata(api_response))
     }
 
-    /// Search by title and/or author
-    pub async fn search(&self, title: Option<&str>, author: Option<&str>) -> Result<Vec<AudibleSearchResult>> {
+    /// Search by title and/or author using Audible's API
+    /// Returns full metadata for each result by fetching from Audnexus
+    pub async fn search(&self, title: Option<&str>, author: Option<&str>) -> Result<Vec<AudibleMetadata>> {
         if title.is_none() && author.is_none() {
             anyhow::bail!("Must provide at least title or author for search");
         }
@@ -85,7 +86,11 @@ impl AudibleClient {
         // Wait for rate limiter
         self.rate_limiter.until_ready().await;
 
-        let mut query_params = vec![];
+        // Build query parameters for Audible's search API
+        let mut query_params = vec![
+            ("num_results", "10"),
+            ("products_sort_by", "Relevance"),
+        ];
 
         if let Some(t) = title {
             query_params.push(("title", t));
@@ -94,11 +99,9 @@ impl AudibleClient {
             query_params.push(("author", a));
         }
 
-        // Add region
-        query_params.push(("region", self.region.tld()));
-        query_params.push(("num_results", "10"));
-
-        let url = format!("{}/books", AUDNEXUS_BASE_URL);
+        // Use Audible's direct API with region-specific TLD
+        let audible_tld = self.region.audible_tld();
+        let url = format!("https://api.audible{}/1.0/catalog/products", audible_tld);
 
         tracing::debug!("Searching Audible: title={:?}, author={:?}", title, author);
 
@@ -106,18 +109,33 @@ impl AudibleClient {
             .query(&query_params)
             .send()
             .await
-            .context("Failed to search Audnexus API")?;
+            .context("Failed to search Audible API")?;
 
         if !response.status().is_success() {
             anyhow::bail!("Search API returned status: {}", response.status());
         }
 
-        let results: Vec<AudnexusSearchResult> = response.json()
+        // Parse Audible's search response (just ASINs)
+        let search_response: AudibleSearchResponse = response.json()
             .await
-            .context("Failed to parse search results")?;
+            .context("Failed to parse Audible search results")?;
 
-        // Convert to our search result structure
-        Ok(results.into_iter().map(convert_search_result).collect())
+        if search_response.products.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Fetch full metadata from Audnexus for each ASIN
+        let mut metadata_results = Vec::new();
+        for product in search_response.products.iter().take(10) {
+            match self.fetch_by_asin(&product.asin).await {
+                Ok(metadata) => metadata_results.push(metadata),
+                Err(e) => {
+                    tracing::warn!("Failed to fetch metadata for ASIN {}: {}", product.asin, e);
+                }
+            }
+        }
+
+        Ok(metadata_results)
     }
 
     /// Download cover image
@@ -157,6 +175,22 @@ impl AudibleClient {
     pub fn region(&self) -> AudibleRegion {
         self.region
     }
+}
+
+// API response structures
+
+// Audible's search API response (from api.audible.com)
+#[derive(Debug, Deserialize)]
+struct AudibleSearchResponse {
+    products: Vec<AudibleProduct>,
+    #[serde(default)]
+    #[allow(dead_code)]  // Part of API response but not used
+    total_results: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct AudibleProduct {
+    asin: String,
 }
 
 // Audnexus API response structures
@@ -202,6 +236,7 @@ struct AudnexusNarrator {
 
 #[derive(Debug, Deserialize)]
 struct AudnexusGenre {
+    #[allow(dead_code)]  // Part of API response but not used
     asin: Option<String>,
     name: String,
     #[serde(rename = "type")]
@@ -213,17 +248,6 @@ struct AudnexusSeries {
     asin: Option<String>,
     name: String,
     position: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AudnexusSearchResult {
-    asin: String,
-    title: String,
-    subtitle: Option<String>,
-    authors: Option<Vec<String>>,
-    narrators: Option<Vec<String>>,
-    #[serde(rename = "runtimeLengthMin")]
-    runtime_length_min: Option<u64>,
 }
 
 /// Convert Audnexus API response to our metadata structure
@@ -312,21 +336,6 @@ fn convert_audnexus_to_metadata(api: AudnexusBookResponse) -> AudibleMetadata {
         runtime_length_ms,
         rating,
         is_abridged,
-    }
-}
-
-/// Convert search result to our structure
-fn convert_search_result(api: AudnexusSearchResult) -> AudibleSearchResult {
-    // Convert runtime from minutes to milliseconds
-    let runtime_ms = api.runtime_length_min.map(|min| min * 60_000);
-
-    AudibleSearchResult {
-        asin: api.asin,
-        title: api.title,
-        subtitle: api.subtitle,
-        authors: api.authors.unwrap_or_default(),
-        narrators: api.narrators.unwrap_or_default(),
-        runtime_ms,
     }
 }
 

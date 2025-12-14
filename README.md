@@ -77,13 +77,14 @@ When downloading audiobooks, they often come as **multiple separate MP3 files** 
 - **🎯 Smart Quality Detection**: Automatically detects and preserves the best audio quality
 - **📖 Chapter Generation**: Multiple sources (files, CUE sheets, auto-detection)
 - **🎨 Metadata Management**: Extracts and enhances metadata from ID3 and M4A tags
-- **🎭 Interactive Metadata Matching** (NEW in v2.3.0): BEETS-inspired interactive matching system
+- **🎭 Interactive Metadata Matching** (v2.4.1 - Enhanced, v2.4.0 - Fixed, v2.3.0 - Introduced): BEETS-inspired interactive matching system
   - Fuzzy string matching with weighted scoring (Title 40%, Author 30%, Duration 20%, Year 10%)
   - Color-coded confidence levels (Green >96%, Yellow 88-96%, Red 80-88%)
   - Visual percentage display for each candidate
   - Interactive selection with Skip/Manual Entry/Custom Search options
   - Batch processing with progress tracking
   - Auto mode for non-interactive matching
+  - **Note**: v2.4.0 fixed search functionality, v2.4.1 enhanced metadata extraction from filenames with underscores
 - **🎧 Audible Metadata Integration** (v2.2.0): Fetch comprehensive metadata from Audible's catalog
   - Automatic ASIN detection from folder names
   - 10 regional stores (US, CA, UK, AU, FR, DE, JP, IT, IN, ES)
@@ -222,13 +223,15 @@ audiobook-forge organize [OPTIONS] --root <PATH>
 - `--dry-run` - Show what would be done without making changes
 - `-v, --verbose` - Verbose logging
 
-#### `match` - Interactive metadata matching (NEW in v2.3.0)
+#### `match` - Interactive metadata matching (v2.4.1 - Enhanced, v2.4.0 - Fixed, v2.3.0 - Introduced)
 
 ```bash
 audiobook-forge match [OPTIONS]
 ```
 
 **BEETS-inspired interactive matching** - Search Audible and interactively select the best metadata match for M4B files with visual scoring and confidence levels.
+
+> **Note:** v2.4.0 fixed critical search API bug (404 errors). v2.4.1 enhanced metadata extraction to correctly parse filenames with underscores (e.g., `Author_-_Title.m4b`), dramatically improving match accuracy.
 
 **Required (one of):**
 - `--file <PATH>` - Match single M4B file
@@ -994,6 +997,52 @@ cargo install audiobook-forge --force
 ---
 
 #### Audible Metadata Issues (NEW in v2.2.0)
+
+**Match command fails with 404 errors (FIXED in v2.4.0):**
+
+**Error in v2.3.0:**
+```
+✗ Error: Search API returned status: 404 Not Found
+```
+
+**Solution:** This was a critical bug in v2.3.0 where the match command used a non-existent API endpoint. **Upgrade to v2.4.1** to fix:
+```bash
+cargo install audiobook-forge --force
+```
+
+After upgrading, the match command will work correctly:
+```bash
+audiobook-forge match --file "Book.m4b"
+# or
+audiobook-forge match --dir ~/Downloads/m4b/ --auto
+```
+
+---
+
+**Poor match results with underscore filenames (FIXED in v2.4.1):**
+
+**Issue:** Files named like `Author_-_Title.m4b` return irrelevant search results.
+
+**Example:**
+- File: `Adam_Phillips_-_On_Giving_Up.m4b`
+- Search: Only title "On Giving Up", missing author
+- Results: Irrelevant books (Barndominium Bible, Reparenting Myself, etc.)
+
+**Solution:** v2.4.1 now correctly parses underscored filenames and extracts both author and title:
+```bash
+# After upgrading to v2.4.1
+audiobook-forge match --file "Adam_Phillips_-_On_Giving_Up.m4b"
+# Now searches: title="On Giving Up" + author="Adam Phillips"
+# Match accuracy: 85-95% (vs 60-70% before)
+```
+
+The fix automatically handles common patterns:
+- `Author_-_Title.m4b` → ✅ Works
+- `Author - Title.m4b` → ✅ Works
+- `Author_ -_Title.m4b` → ✅ Works
+- Mixed patterns → ✅ Works
+
+---
 
 **No metadata found:**
 

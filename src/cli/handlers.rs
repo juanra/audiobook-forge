@@ -585,7 +585,7 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
                     println!("  {}. {} by {}",
                         i + 1,
                         style(&result.title).yellow(),
-                        style(result.authors.join(", ")).cyan()
+                        style(result.authors_string()).cyan()
                     );
                 }
 
@@ -963,21 +963,10 @@ async fn search_audible(
         bail!("Need at least title or author to search");
     }
 
-    // Search and convert to full metadata
-    let search_results = client.search(title, author).await?;
+    // Search Audible (now returns full metadata via two-step process)
+    let metadata_results = client.search(title, author).await?;
 
-    let mut full_metadata = Vec::new();
-    for result in search_results.iter().take(10) {
-        // Limit to top 10
-        match client.fetch_by_asin(&result.asin).await {
-            Ok(metadata) => full_metadata.push(metadata),
-            Err(e) => {
-                tracing::warn!("Failed to fetch {}: {}", result.asin, e);
-            }
-        }
-    }
-
-    Ok(full_metadata)
+    Ok(metadata_results)
 }
 
 /// Apply metadata to M4B file

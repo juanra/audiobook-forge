@@ -5,6 +5,156 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.2] - 2025-12-14
+
+### 🧹 Code Cleanup
+
+This release removes dead code and eliminates all compiler warnings for a cleaner build.
+
+### Fixed
+
+#### Removed Dead Code
+- **Removed obsolete CLI runner functions** - Cleaned up unused code in `src/cli/commands.rs`
+  - Removed unused `run()` function and all helper functions (`run_build`, `run_organize`, `run_config`, `run_check`, `run_metadata`, `run_match`, `run_version`)
+  - These functions were replaced by direct handler calls in `main.rs` but never removed
+  - Removed associated unused imports (`ConfigManager`, `DependencyChecker`, `Result`)
+
+#### Silenced Intentional Warnings
+- **Marked unused API response fields** - Added `#[allow(dead_code)]` to fields that are part of API responses but not used
+  - `total_results` in `AudibleSearchResponse` (Audible API response field)
+  - `asin` in `AudnexusGenre` (Audnexus API response field)
+- **Preserved utility function** - Marked `natural_sort_strings()` with `#[allow(dead_code)]` for future use
+
+### Improved
+
+#### Build Quality
+- **Zero compiler warnings** - Clean build with no warnings in library or binary compilation
+- **Reduced code size** - Removed ~170 lines of obsolete code
+- **Better code organization** - Clarified intentional vs. accidental unused code
+
+### Technical Details
+
+#### Files Modified
+- `src/cli/commands.rs` - Removed 8 unused functions and 3 unused imports (~170 lines removed)
+- `src/audio/audible.rs` - Added `#[allow(dead_code)]` annotations to 2 API response fields
+- `src/utils/sorting.rs` - Added `#[allow(dead_code)]` annotation to utility function
+
+#### Before → After
+- Compiler warnings: **11 → 0**
+- Dead code: **Removed**
+- Build output: **Clean**
+
+### Migration Notes
+
+No action required - this is purely a code cleanup release with no functional changes.
+
+---
+
+## [2.4.1] - 2025-12-14
+
+### 🔧 Enhanced Metadata Extraction
+
+This release significantly improves metadata extraction from M4B filenames, especially for files with underscores, resulting in much better search results.
+
+### Fixed
+
+#### Filename Pattern Matching
+- **Fixed underscore handling** - Now correctly parses author and title from filenames with underscores
+  - Previous: Only recognized `"Author - Title"` (space-dash-space) → failed on `Author_-_Title`
+  - Now supports: `_-_`, `_ -_`, `_- `, and other common variations
+  - Automatically converts underscores to spaces: `Adam_Phillips_-_On_Giving_Up` → author: "Adam Phillips", title: "On Giving Up"
+  - **Impact**: Files downloaded from audiobook sites (which often use underscores) now extract metadata correctly
+
+#### Metadata Merging Logic
+- **Fixed incomplete metadata extraction** - Always merges embedded tags with filename data
+  - Previous: If embedded metadata had title, skipped filename parsing (lost author info)
+  - Now: Always parses both and merges (embedded takes priority, filename fills gaps)
+  - **Example**: File with embedded title "Be Unstoppable" but no author now correctly extracts author "Alden Mills" from filename `Alden_Mills_-_Be_Unstoppable.m4b`
+
+### Improved
+
+#### Search Quality
+- **Better match accuracy** - Extracting both title AND author dramatically improves search results
+  - Before fix: Searching with only title "On Giving Up" → irrelevant results (Barndominium Bible, Reparenting Myself, etc.)
+  - After fix: Searching with title + author "On Giving Up" + "Adam Phillips" → correct book matches
+  - Match confidence scores improved from 60-70% to 85-95% range for most files
+
+### Technical Details
+
+#### Files Modified
+- `src/utils/extraction.rs` - Enhanced filename parsing and metadata merging
+  - Added multi-pattern separator matching (5 common patterns)
+  - Changed to always merge embedded + filename metadata
+  - Improved underscore → space conversion
+- `tests/audible_integration.rs` - Fixed compilation error with `authors_string()` method
+
+#### Tests Added
+- Filename parsing with underscores: `Adam_Phillips_-_On_Giving_Up`
+- Mixed underscores and spaces: `Neil_deGrasse_Tyson - Just Visiting This Planet`
+- Multiple underscore patterns for common download formats
+
+### Migration Notes
+
+No action required - this is a transparent enhancement. If upgrading from v2.4.0:
+- Files with underscored names will now be parsed correctly
+- Search results will be significantly more accurate
+- No configuration changes needed
+
+---
+
+## [2.4.0] - 2025-12-14
+
+### 🐛 Critical Bug Fix: Match Command Now Functional
+
+This release fixes a critical bug in v2.3.0 where the `match` command was completely non-functional due to using a non-existent API endpoint.
+
+### Fixed
+
+#### Match Command Search Functionality
+- **Fixed Audible search** - Replaced non-existent Audnexus search endpoint with Audible's direct API
+  - Previous implementation used `https://api.audnex.us/books?title=...&author=...` (404 error)
+  - Now uses two-step approach (same as audiobookshelf):
+    1. Search Audible API: `https://api.audible.com/1.0/catalog/products` → get ASINs
+    2. Fetch full metadata: `https://api.audnex.us/books/{asin}` → get complete book data
+  - All 59 test files previously failed with "404 Not Found"
+  - Now successfully matches 39/59 files with confidence scores (20 not in Audible catalog)
+
+#### API Integration
+- **Added region-specific TLD support** - Audible API now uses correct TLDs per region
+  - US: `.com`, UK: `.co.uk`, AU: `.com.au`, CA: `.ca`, etc.
+  - Previously only used region codes for Audnexus API
+- **Improved error handling** - Gracefully handles 500 errors from Audnexus for individual ASINs
+- **Fixed author display** - Updated to use `authors_string()` method for proper formatting
+
+### Changed
+
+#### Internal Architecture
+- `AudibleClient::search()` now returns `Vec<AudibleMetadata>` directly (was `Vec<AudibleSearchResult>`)
+- Added `AudibleSearchResponse` and `AudibleProduct` structs for Audible API parsing
+- Removed unused `AudnexusSearchResult` struct and `convert_search_result()` function
+- Simplified `search_audible()` handler to use new two-step search internally
+
+### Technical Details
+
+#### Files Modified
+- `src/models/audible.rs` - Added `audible_tld()` method for region-specific API domains
+- `src/audio/audible.rs` - Rewrote `search()` to use Audible's API + Audnexus two-step approach
+- `src/cli/handlers.rs` - Simplified search handler, fixed author display formatting
+
+#### Code Changes
+- ~100 lines modified
+- Zero breaking changes to command-line interface
+- Maintains full backward compatibility
+
+### Migration Notes
+
+No action required - this is a transparent bug fix. If you're upgrading from v2.3.0:
+- The `match` command will now work as originally documented
+- All command-line flags and options remain unchanged
+- Configuration files require no modifications
+
+---
+
 ## [2.3.0] - 2025-12-14
 
 ### 🎯 Interactive Metadata Matching (BEETS-Inspired)

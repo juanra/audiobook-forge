@@ -9,15 +9,12 @@ pub fn extract_current_metadata(file_path: &Path) -> Result<CurrentMetadata> {
     // Try embedded metadata first
     let embedded = extract_from_embedded_tags(file_path)?;
 
-    if embedded.is_sufficient() {
-        Ok(embedded)
-    } else {
-        // Fallback to filename parsing
-        let from_filename = extract_from_filename(file_path)?;
+    // Always try filename parsing to fill in any gaps
+    let from_filename = extract_from_filename(file_path)?;
 
-        // Merge: prefer embedded values if present, use filename as fallback
-        Ok(embedded.merge_with(from_filename))
-    }
+    // Merge: prefer embedded values if present, use filename as fallback
+    // This ensures we get author from filename even if title is embedded
+    Ok(embedded.merge_with(from_filename))
 }
 
 /// Extract from embedded M4B tags
@@ -65,16 +62,25 @@ fn extract_from_filename(file_path: &Path) -> Result<CurrentMetadata> {
 
 /// Parse "Author - Title" pattern
 fn parse_author_title_pattern(filename: &str) -> Option<(String, String)> {
-    // Split on " - " (note the spaces)
-    let parts: Vec<&str> = filename.split(" - ").collect();
+    // Try different separators: " - ", "_-_", " -_ ", etc.
+    let separators = [" - ", "_-_", " -_ ", "_ -_", "_- "];
 
-    if parts.len() >= 2 {
-        let author = parts[0].trim().to_string();
-        let title = parts[1..].join(" - ").trim().to_string();
-        Some((author, title))
-    } else {
-        None
+    for separator in separators {
+        let parts: Vec<&str> = filename.split(separator).collect();
+
+        if parts.len() >= 2 {
+            // Clean up underscores from author/title and convert to spaces
+            let author = parts[0].replace('_', " ").trim().to_string();
+            let title = parts[1..].join(separator).replace('_', " ").trim().to_string();
+
+            // Only return if both author and title are non-empty
+            if !author.is_empty() && !title.is_empty() {
+                return Some((author, title));
+            }
+        }
     }
+
+    None
 }
 
 #[cfg(test)]
@@ -83,6 +89,7 @@ mod tests {
 
     #[test]
     fn test_parse_author_title_pattern() {
+        // Standard space-dash-space pattern
         let (author, title) = parse_author_title_pattern("Andy Weir - Project Hail Mary").unwrap();
         assert_eq!(author, "Andy Weir");
         assert_eq!(title, "Project Hail Mary");
@@ -91,6 +98,20 @@ mod tests {
         let (author, title) = parse_author_title_pattern("Isaac Asimov - I, Robot - Complete Edition").unwrap();
         assert_eq!(author, "Isaac Asimov");
         assert_eq!(title, "I, Robot - Complete Edition");
+
+        // Underscore patterns (common in downloaded audiobooks)
+        let (author, title) = parse_author_title_pattern("Adam_Phillips_-_On_Giving_Up").unwrap();
+        assert_eq!(author, "Adam Phillips");
+        assert_eq!(title, "On Giving Up");
+
+        let (author, title) = parse_author_title_pattern("Morgan_Housel_-_The_Art_of_Spending_Money").unwrap();
+        assert_eq!(author, "Morgan Housel");
+        assert_eq!(title, "The Art of Spending Money");
+
+        // Mixed underscores and spaces
+        let (author, title) = parse_author_title_pattern("Neil_deGrasse_Tyson - Just Visiting This Planet").unwrap();
+        assert_eq!(author, "Neil deGrasse Tyson");
+        assert_eq!(title, "Just Visiting This Planet");
 
         // No match
         assert_eq!(parse_author_title_pattern("JustATitle"), None);

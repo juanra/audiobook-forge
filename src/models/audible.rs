@@ -31,7 +31,7 @@ pub enum AudibleRegion {
 }
 
 impl AudibleRegion {
-    /// Get the TLD for this region
+    /// Get the region code for Audnexus API (e.g., "us", "uk")
     pub fn tld(&self) -> &'static str {
         match self {
             Self::US => "us",
@@ -44,6 +44,22 @@ impl AudibleRegion {
             Self::IT => "it",
             Self::IN => "in",
             Self::ES => "es",
+        }
+    }
+
+    /// Get the TLD for Audible's API (e.g., ".com", ".co.uk")
+    pub fn audible_tld(&self) -> &'static str {
+        match self {
+            Self::US => ".com",
+            Self::CA => ".ca",
+            Self::UK => ".co.uk",
+            Self::AU => ".com.au",
+            Self::FR => ".fr",
+            Self::DE => ".de",
+            Self::JP => ".co.jp",
+            Self::IT => ".it",
+            Self::IN => ".in",
+            Self::ES => ".es",
         }
     }
 }

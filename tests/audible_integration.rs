@@ -136,7 +136,7 @@ async fn test_real_search() {
             assert!(!results.is_empty());
             println!("Found {} results", results.len());
             for result in results.iter().take(3) {
-                println!("  - {} by {}", result.title, result.authors.join(", "));
+                println!("  - {} by {}", result.title, result.authors_string());
             }
         }
         Err(e) => {
