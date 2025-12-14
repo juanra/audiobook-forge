@@ -77,7 +77,14 @@ When downloading audiobooks, they often come as **multiple separate MP3 files** 
 - **🎯 Smart Quality Detection**: Automatically detects and preserves the best audio quality
 - **📖 Chapter Generation**: Multiple sources (files, CUE sheets, auto-detection)
 - **🎨 Metadata Management**: Extracts and enhances metadata from ID3 and M4A tags
-- **🎧 Audible Metadata Integration** (NEW in v2.2.0): Fetch comprehensive metadata from Audible's catalog
+- **🎭 Interactive Metadata Matching** (NEW in v2.3.0): BEETS-inspired interactive matching system
+  - Fuzzy string matching with weighted scoring (Title 40%, Author 30%, Duration 20%, Year 10%)
+  - Color-coded confidence levels (Green >96%, Yellow 88-96%, Red 80-88%)
+  - Visual percentage display for each candidate
+  - Interactive selection with Skip/Manual Entry/Custom Search options
+  - Batch processing with progress tracking
+  - Auto mode for non-interactive matching
+- **🎧 Audible Metadata Integration** (v2.2.0): Fetch comprehensive metadata from Audible's catalog
   - Automatic ASIN detection from folder names
   - 10 regional stores (US, CA, UK, AU, FR, DE, JP, IT, IN, ES)
   - High-quality cover art download
@@ -214,6 +221,52 @@ audiobook-forge organize [OPTIONS] --root <PATH>
 - `--root <PATH>` - Root directory to organize (required)
 - `--dry-run` - Show what would be done without making changes
 - `-v, --verbose` - Verbose logging
+
+#### `match` - Interactive metadata matching (NEW in v2.3.0)
+
+```bash
+audiobook-forge match [OPTIONS]
+```
+
+**BEETS-inspired interactive matching** - Search Audible and interactively select the best metadata match for M4B files with visual scoring and confidence levels.
+
+**Required (one of):**
+- `--file <PATH>` - Match single M4B file
+- `--dir <PATH>` - Match all M4B files in directory
+
+**Optional:**
+- `--title <TITLE>` - Manual title override
+- `--author <AUTHOR>` - Manual author override
+- `--auto` - Auto-select best match (non-interactive)
+- `--region <REGION>` - Audible region (default: us)
+- `--keep-cover` - Keep existing cover art instead of downloading
+- `--dry-run` - Show matches but don't apply
+
+**Features:**
+- 🎯 Fuzzy string matching with weighted scoring (Title: 40%, Author: 30%, Duration: 20%, Year: 10%)
+- 🎨 Color-coded confidence levels (Green: >96%, Yellow: 88-96%, Red: 80-88%)
+- 📊 Visual percentage display for each candidate
+- 🔄 Multiple options: Skip, Manual Entry, Custom Search
+- 📝 Before/after metadata comparison
+- 🚀 Batch processing with progress tracking
+
+**Examples:**
+```bash
+# Interactive match single file
+audiobook-forge match --file "Book.m4b"
+
+# Batch process directory
+audiobook-forge match --dir /path/to/audiobooks
+
+# Auto mode (non-interactive)
+audiobook-forge match --dir /path --auto
+
+# Manual override
+audiobook-forge match --file "Book.m4b" --title "Title" --author "Author"
+
+# Dry run
+audiobook-forge match --dir /path --dry-run
+```
 
 #### `metadata` - Fetch and manage Audible metadata (NEW in v2.2.0)
 
@@ -693,7 +746,13 @@ metadata:
   fallback_to_folder_name: true  # Use folder name as fallback
   default_language: "en"     # Default language code
 
-  # Audible Metadata Integration (NEW in v2.2.0)
+  # Interactive Matching Mode (NEW in v2.3.0)
+  match_mode: disabled       # Options: disabled, auto, interactive
+                             # - disabled: Don't match during build (default)
+                             # - auto: Automatically select best match (non-interactive)
+                             # - interactive: Prompt user for selection
+
+  # Audible Metadata Integration (v2.2.0)
   audible:
     enabled: false           # Enable automatic fetching during build
     region: "us"             # Audible region: us, ca, uk, au, fr, de, jp, it, in, es

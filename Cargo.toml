@@ -1,6 +1,6 @@
 [package]
 name = "audiobook-forge"
-version = "2.2.0"
+version = "2.3.0"
 edition = "2021"
 authors = ["Audiobook Forge Contributors"]
 license = "MIT"
@@ -20,6 +20,10 @@ tokio-stream = "0.1"
 reqwest = { version = "0.11", features = ["json"] }
 governor = "0.6"
 lazy_static = "1.4"
+
+# Interactive UI for matching
+inquire = "0.6"
+strsim = "0.10"
 
 # Progress bars and terminal UI
 indicatif = "0.17"

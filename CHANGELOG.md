@@ -5,6 +5,244 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2025-12-14
+
+### 🎯 Interactive Metadata Matching (BEETS-Inspired)
+
+This release adds a powerful interactive metadata matching system inspired by BEETS, allowing you to search, score, and interactively select the best Audible metadata match for your M4B files.
+
+### Added
+
+#### New `match` Command
+- **Interactive metadata matching** - Search Audible and select the best match with visual scoring
+  - Fuzzy string matching with normalized Levenshtein distance
+  - Weighted scoring system: Title (40%), Author (30%), Duration (20%), Year (10%)
+  - Color-coded confidence levels: Strong (>96%), Medium (88-96%), Low (80-88%)
+  - Visual percentage display for each candidate match
+
+#### Metadata Extraction
+- **Smart extraction** - Multi-source metadata detection
+  - Embedded M4B tags (mp4ameta) - primary source
+  - Filename parsing - "Author - Title.m4b" pattern support
+  - Automatic fallback and merge strategies
+  - Manual override via `--title` and `--author` flags
+
+#### Interactive UI
+- **Rich terminal interface** using `inquire` crate
+  - Numbered candidate selection (1-10)
+  - Metadata comparison with before/after views
+  - Action menu: Skip, Manual Entry, Custom Search
+  - Confirmation dialog showing field changes
+  - Manual metadata entry form
+  - Custom search with new terms
+
+#### Batch Processing
+- **Directory mode** - Process multiple M4B files at once
+  - `--dir` flag for batch processing
+  - Sequential file processing with progress tracking
+  - Error recovery and summary reporting
+  - Continues on individual file failures
+
+#### Operating Modes
+- **Interactive mode** (default) - User selects each match
+- **Auto mode** (`--auto`) - Automatically selects best match
+- **Dry run** (`--dry-run`) - Preview matches without applying changes
+
+#### Match Scoring System
+- **Distance calculation** - BEETS-inspired weighted penalties
+  - String normalization (lowercase, trim, remove "the" prefix)
+  - Year distance with 10-year tolerance
+  - Duration distance with 5% tolerance (acceptable), 20% limit
+  - Configurable confidence thresholds
+
+- **Match candidates** - Up to 10 results from Audible
+  - Sorted by best match first
+  - Display: percentage, title, author, year, duration
+  - Color-coded by confidence level
+
+#### Configuration
+- **New `match_mode` setting** in config.yaml
+  ```yaml
+  metadata:
+    match_mode: disabled  # Options: disabled, auto, interactive
+  ```
+  - `disabled` - Don't match during build (default)
+  - `auto` - Automatically select best match (non-interactive)
+  - `interactive` - Prompt user for each file
+
+### Command Options
+
+```bash
+audiobook-forge match [OPTIONS]
+```
+
+**Required (one of):**
+- `--file <PATH>` - Match single M4B file
+- `--dir <PATH>` - Match all M4B files in directory
+
+**Optional:**
+- `--title <TITLE>` - Manual title override
+- `--author <AUTHOR>` - Manual author override
+- `--auto` - Auto-select best match (non-interactive)
+- `--region <REGION>` - Audible region (default: us)
+- `--keep-cover` - Keep existing cover art instead of downloading
+- `--dry-run` - Show matches but don't apply
+
+### Usage Examples
+
+#### Match Single File (Interactive)
+```bash
+audiobook-forge match --file "Book.m4b"
+```
+
+**Interactive Flow:**
+```
+Match Candidates:
+Current: On Giving Up by Unknown
+
+1. [95.2%] On Giving Up by Adam Phillips (2022, 5h 23m) [green]
+2. [82.3%] Giving Up by Jane Doe (2021, 6h 12m) [yellow]
+3. [71.5%] On Not Giving Up by John Smith (2020, 4h 45m) [red]
+───────────────────────────────────
+[S] Skip this file
+[M] Enter metadata manually
+[R] Search with different terms
+
+Select an option: 1
+
+Metadata Changes:
+  Title: On Giving Up
+  Author: (none) → Adam Phillips
+  Narrator: → Adam Phillips
+  Year: → 2022
+  Publisher: → Penguin Books
+
+Apply these changes? Yes
+
+✓ Metadata applied successfully
+```
+
+#### Batch Processing (Directory)
+```bash
+audiobook-forge match --dir /path/to/audiobooks --region us
+```
+
+**Output:**
+```
+✓ Found 4 M4B file(s)
+
+→ [1/4] Processing: /path/Book1.m4b
+  [Interactive selection...]
+  ✓ Metadata applied
+
+→ [2/4] Processing: /path/Book2.m4b
+  [Interactive selection...]
+  → Skipped
+
+→ [3/4] Processing: /path/Book3.m4b
+  [Interactive selection...]
+  ✓ Metadata applied
+
+→ [4/4] Processing: /path/Book4.m4b
+  [Interactive selection...]
+  ✓ Metadata applied
+
+Summary:
+  ✓ Processed: 3
+  → Skipped: 1
+  ✗ Failed: 0
+```
+
+#### Auto Mode (Non-Interactive)
+```bash
+audiobook-forge match --dir /path --auto --region us
+```
+
+Automatically selects the best match based on scoring without prompting.
+
+#### Manual Override
+```bash
+audiobook-forge match --file "Book.m4b" \
+  --title "Project Hail Mary" \
+  --author "Andy Weir"
+```
+
+#### Dry Run
+```bash
+audiobook-forge match --dir /path --dry-run
+```
+
+Shows what would be matched without applying any changes.
+
+### Technical Details
+
+#### New Dependencies
+- `inquire` (0.6.2) - Interactive terminal UI
+- `strsim` (0.10.0) - String similarity (normalized Levenshtein)
+
+#### Files Added
+- `src/models/match_models.rs` - Match data structures (180 lines)
+- `src/utils/scoring.rs` - Scoring engine (200 lines)
+- `src/utils/extraction.rs` - Metadata extraction (100 lines)
+- `src/ui/mod.rs` - UI module
+- `src/ui/prompts.rs` - Interactive prompts (290 lines)
+
+#### Files Modified
+- `src/cli/commands.rs` - Added `Match` command and `MatchArgs`
+- `src/cli/handlers.rs` - Added `handle_match()` function (250 lines)
+- `src/cli/mod.rs` - Exported `handle_match`
+- `src/main.rs` - Added match command routing
+- `src/models/config.rs` - Added `MatchMode` enum
+- `src/models/mod.rs` - Exported match models
+- `templates/config.yaml` - Added `match_mode` configuration
+
+#### Code Statistics
+- ~1,200 lines of new code
+- Full async/await integration
+- Comprehensive error handling
+- Zero compilation errors
+
+### Architecture
+
+**Match Flow:**
+```
+File/Directory → Metadata Extraction → Audible Search →
+Scoring & Ranking → Interactive Selection → Metadata Application
+```
+
+**Scoring Algorithm:**
+1. Extract current metadata (embedded tags + filename parsing)
+2. Search Audible API (up to 10 results)
+3. Calculate weighted distance for each candidate
+4. Normalize to percentage (100% - distance)
+5. Assign confidence level
+6. Sort by best match
+7. Present to user with color-coding
+
+**Distance Calculation:**
+- Title: 40% weight (normalized Levenshtein)
+- Author: 30% weight (best match from multiple authors)
+- Duration: 20% weight (5% tolerance = 0.0, >20% = 1.0)
+- Year: 10% weight (±10 years = 1.0 distance)
+
+### Limitations
+
+- **Audnexus API dependency** - Requires internet connection and working API
+- **API rate limiting** - Respects 100 requests/minute limit
+- **Fuzzy matching accuracy** - May require manual selection for ambiguous books
+- **M4B files only** - Currently only supports M4B format (MP3 support planned)
+
+### Future Enhancements
+
+- Build integration with `match_mode` config (interactive/auto during build)
+- Support for MP3 files with metadata matching
+- Custom scoring weights configuration
+- Match confidence threshold settings
+- Batch auto-matching with confidence filters
+- Alternative metadata sources (MusicBrainz, GoodReads)
+
+---
+
 ## [2.2.0] - 2025-12-13
 
 ### 🎧 Audible Metadata Integration

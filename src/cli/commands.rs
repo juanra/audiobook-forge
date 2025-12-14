@@ -48,6 +48,9 @@ pub enum Commands {
     #[command(subcommand)]
     Metadata(MetadataCommands),
 
+    /// Interactive metadata matching for M4B files
+    Match(MatchArgs),
+
     /// Check system dependencies
     Check,
 
@@ -220,6 +223,42 @@ pub enum MetadataCommands {
     },
 }
 
+/// Arguments for the match command
+#[derive(Args)]
+pub struct MatchArgs {
+    /// M4B file to match
+    #[arg(long, short = 'f', conflicts_with = "dir")]
+    pub file: Option<PathBuf>,
+
+    /// Directory of M4B files
+    #[arg(long, short = 'd', conflicts_with = "file")]
+    pub dir: Option<PathBuf>,
+
+    /// Manual title override
+    #[arg(long)]
+    pub title: Option<String>,
+
+    /// Manual author override
+    #[arg(long)]
+    pub author: Option<String>,
+
+    /// Auto mode (non-interactive, select best match)
+    #[arg(long)]
+    pub auto: bool,
+
+    /// Audible region
+    #[arg(long, default_value = "us")]
+    pub region: String,
+
+    /// Keep existing cover art instead of downloading
+    #[arg(long)]
+    pub keep_cover: bool,
+
+    /// Dry run (show matches but don't apply)
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
 /// Run the CLI application
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
@@ -239,6 +278,7 @@ pub fn run() -> Result<()> {
         Commands::Organize(args) => run_organize(args),
         Commands::Config(cmd) => run_config(cmd),
         Commands::Metadata(cmd) => run_metadata(cmd),
+        Commands::Match(args) => run_match(args),
         Commands::Check => run_check(),
         Commands::Version => run_version(),
     }
@@ -367,6 +407,18 @@ fn run_metadata(cmd: MetadataCommands) -> Result<()> {
     // Run async handler
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(handle_metadata(cmd, config))
+}
+
+fn run_match(args: MatchArgs) -> Result<()> {
+    use crate::cli::handlers::handle_match;
+    use crate::utils::ConfigManager;
+
+    // Load config
+    let config = ConfigManager::load_or_default(None)?;
+
+    // Run async handler
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(handle_match(args, config))
 }
 
 fn run_version() -> Result<()> {

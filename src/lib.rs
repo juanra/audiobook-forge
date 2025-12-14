@@ -12,6 +12,7 @@ pub mod models;
 pub mod core;
 pub mod audio;
 pub mod utils;
+pub mod ui;
 
 // Re-export commonly used types
 pub use models::{BookFolder, Track, QualityProfile, ProcessingResult, BookCase};

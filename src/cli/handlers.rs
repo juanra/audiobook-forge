@@ -1,10 +1,11 @@
 //! CLI command handlers
 
-use crate::cli::commands::{BuildArgs, ConfigCommands, OrganizeArgs, MetadataCommands};
+use crate::cli::commands::{BuildArgs, ConfigCommands, OrganizeArgs, MetadataCommands, MatchArgs};
 use crate::core::{Analyzer, BatchProcessor, Organizer, RetryConfig, Scanner};
-use crate::models::{Config, AudibleRegion};
-use crate::utils::{ConfigManager, DependencyChecker, AudibleCache};
+use crate::models::{Config, AudibleRegion, CurrentMetadata, MetadataSource};
+use crate::utils::{ConfigManager, DependencyChecker, AudibleCache, scoring, extraction};
 use crate::audio::{AudibleClient, detect_asin};
+use crate::ui::{prompt_match_selection, confirm_match, prompt_manual_metadata, prompt_custom_search, UserChoice};
 use anyhow::{Context, Result, bail};
 use console::style;
 use std::path::PathBuf;
@@ -727,5 +728,311 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
 
             Ok(())
         }
+    }
+}
+
+/// Handle the match command
+pub async fn handle_match(args: MatchArgs, config: Config) -> Result<()> {
+    // Determine files to process
+    let files = get_files_to_process(&args)?;
+
+    if files.is_empty() {
+        println!("{} No M4B files found", style("✗").red());
+        return Ok(());
+    }
+
+    println!(
+        "{} Found {} M4B file(s)",
+        style("✓").green(),
+        style(files.len()).cyan()
+    );
+
+    // Initialize Audible client and cache
+    let region = AudibleRegion::from_str(&args.region)?;
+    let client = AudibleClient::with_rate_limit(
+        region,
+        config.metadata.audible.rate_limit_per_minute
+    )?;
+    let cache = AudibleCache::with_ttl_hours(
+        config.metadata.audible.cache_duration_hours
+    )?;
+
+    // Process each file
+    let mut processed = 0;
+    let mut skipped = 0;
+    let mut failed = 0;
+
+    for (idx, file_path) in files.iter().enumerate() {
+        println!(
+            "\n{} [{}/{}] Processing: {}",
+            style("→").cyan(),
+            idx + 1,
+            files.len(),
+            style(file_path.display()).yellow()
+        );
+
+        match process_single_file(&file_path, &args, &client, &cache, &config).await {
+            Ok(ProcessResult::Applied) => processed += 1,
+            Ok(ProcessResult::Skipped) => skipped += 1,
+            Err(e) => {
+                eprintln!("{} Error: {}", style("✗").red(), e);
+                failed += 1;
+            }
+        }
+    }
+
+    // Summary
+    println!("\n{}", style("Summary:").bold().cyan());
+    println!("  {} Processed: {}", style("✓").green(), processed);
+    println!("  {} Skipped: {}", style("→").yellow(), skipped);
+    if failed > 0 {
+        println!("  {} Failed: {}", style("✗").red(), failed);
+    }
+
+    Ok(())
+}
+
+/// Result of processing a single file
+enum ProcessResult {
+    Applied,
+    Skipped,
+}
+
+/// Process a single M4B file
+async fn process_single_file(
+    file_path: &PathBuf,
+    args: &MatchArgs,
+    client: &AudibleClient,
+    _cache: &AudibleCache,
+    config: &Config,
+) -> Result<ProcessResult> {
+    // Extract current metadata
+    let mut current = if args.title.is_some() || args.author.is_some() {
+        // Manual override
+        CurrentMetadata {
+            title: args.title.clone(),
+            author: args.author.clone(),
+            year: None,
+            duration: None,
+            source: MetadataSource::Manual,
+        }
+    } else {
+        // Auto-extract
+        extraction::extract_current_metadata(file_path)?
+    };
+
+    // Search loop (allows re-search)
+    loop {
+        // Search Audible
+        let search_results = search_audible(&current, client).await?;
+
+        if search_results.is_empty() {
+            println!("{} No matches found on Audible", style("⚠").yellow());
+
+            if args.auto {
+                return Ok(ProcessResult::Skipped);
+            }
+
+            // Offer manual entry or skip
+            match prompt_no_results_action()? {
+                NoResultsAction::ManualEntry => {
+                    let manual_metadata = prompt_manual_metadata()?;
+                    apply_metadata(file_path, &manual_metadata, args, config).await?;
+                    return Ok(ProcessResult::Applied);
+                }
+                NoResultsAction::CustomSearch => {
+                    let (title, author) = prompt_custom_search()?;
+                    current.title = title;
+                    current.author = author;
+                    current.source = MetadataSource::Manual;
+                    continue; // Re-search
+                }
+                NoResultsAction::Skip => {
+                    return Ok(ProcessResult::Skipped);
+                }
+            }
+        }
+
+        // Score and rank candidates
+        let candidates = scoring::score_and_sort(&current, search_results);
+
+        // Auto mode: select best match
+        if args.auto {
+            let best = &candidates[0];
+            println!(
+                "  {} Auto-selected: {} ({:.1}%)",
+                style("✓").green(),
+                best.metadata.title,
+                (1.0 - best.distance.total_distance()) * 100.0
+            );
+
+            if !args.dry_run {
+                apply_metadata(file_path, &best.metadata, args, config).await?;
+            }
+            return Ok(ProcessResult::Applied);
+        }
+
+        // Interactive mode
+        match prompt_match_selection(&current, &candidates)? {
+            UserChoice::SelectMatch(idx) => {
+                let selected = &candidates[idx];
+
+                // Confirm selection
+                if confirm_match(&current, selected)? {
+                    if !args.dry_run {
+                        apply_metadata(file_path, &selected.metadata, args, config).await?;
+                    }
+                    return Ok(ProcessResult::Applied);
+                } else {
+                    // User cancelled, show menu again
+                    continue;
+                }
+            }
+            UserChoice::Skip => {
+                return Ok(ProcessResult::Skipped);
+            }
+            UserChoice::ManualEntry => {
+                let manual_metadata = prompt_manual_metadata()?;
+                if !args.dry_run {
+                    apply_metadata(file_path, &manual_metadata, args, config).await?;
+                }
+                return Ok(ProcessResult::Applied);
+            }
+            UserChoice::CustomSearch => {
+                let (title, author) = prompt_custom_search()?;
+                current.title = title;
+                current.author = author;
+                current.source = MetadataSource::Manual;
+                continue; // Re-search
+            }
+        }
+    }
+}
+
+/// Get list of M4B files to process
+fn get_files_to_process(args: &MatchArgs) -> Result<Vec<PathBuf>> {
+    if let Some(file) = &args.file {
+        // Single file mode
+        if !file.exists() {
+            bail!("File not found: {}", file.display());
+        }
+        if !is_m4b_file(file) {
+            bail!("File is not an M4B: {}", file.display());
+        }
+        Ok(vec![file.clone()])
+    } else if let Some(dir) = &args.dir {
+        // Directory mode
+        if !dir.is_dir() {
+            bail!("Not a directory: {}", dir.display());
+        }
+
+        let mut files = Vec::new();
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() && is_m4b_file(&path) {
+                files.push(path);
+            }
+        }
+
+        files.sort();
+        Ok(files)
+    } else {
+        bail!("Must specify --file or --dir");
+    }
+}
+
+/// Check if file is M4B
+fn is_m4b_file(path: &PathBuf) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("m4b"))
+        .unwrap_or(false)
+}
+
+/// Search Audible API
+async fn search_audible(
+    current: &CurrentMetadata,
+    client: &AudibleClient,
+) -> Result<Vec<crate::models::AudibleMetadata>> {
+    // Build search query
+    let title = current.title.as_deref();
+    let author = current.author.as_deref();
+
+    if title.is_none() && author.is_none() {
+        bail!("Need at least title or author to search");
+    }
+
+    // Search and convert to full metadata
+    let search_results = client.search(title, author).await?;
+
+    let mut full_metadata = Vec::new();
+    for result in search_results.iter().take(10) {
+        // Limit to top 10
+        match client.fetch_by_asin(&result.asin).await {
+            Ok(metadata) => full_metadata.push(metadata),
+            Err(e) => {
+                tracing::warn!("Failed to fetch {}: {}", result.asin, e);
+            }
+        }
+    }
+
+    Ok(full_metadata)
+}
+
+/// Apply metadata to M4B file
+async fn apply_metadata(
+    file_path: &PathBuf,
+    metadata: &crate::models::AudibleMetadata,
+    args: &MatchArgs,
+    config: &Config,
+) -> Result<()> {
+    // Download cover if needed
+    let cover_path = if !args.keep_cover && metadata.cover_url.is_some() && config.metadata.audible.download_covers {
+        let temp_cover = std::env::temp_dir().join(format!("{}.jpg", metadata.asin));
+
+        if let Some(cover_url) = &metadata.cover_url {
+            let client = AudibleClient::new(AudibleRegion::US)?; // Region doesn't matter for covers
+            client.download_cover(cover_url, &temp_cover).await?;
+            Some(temp_cover)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Inject metadata
+    crate::audio::inject_audible_metadata(file_path, metadata, cover_path.as_deref()).await?;
+
+    println!("  {} Metadata applied successfully", style("✓").green());
+
+    Ok(())
+}
+
+/// Action to take when no results found
+enum NoResultsAction {
+    ManualEntry,
+    CustomSearch,
+    Skip,
+}
+
+/// Prompt for action when no results found
+fn prompt_no_results_action() -> Result<NoResultsAction> {
+    use inquire::Select;
+
+    let options = vec![
+        "Enter metadata manually",
+        "Search with different terms",
+        "Skip this file",
+    ];
+
+    let selection = Select::new("What would you like to do?", options).prompt()?;
+
+    match selection {
+        "Enter metadata manually" => Ok(NoResultsAction::ManualEntry),
+        "Search with different terms" => Ok(NoResultsAction::CustomSearch),
+        "Skip this file" => Ok(NoResultsAction::Skip),
+        _ => Ok(NoResultsAction::Skip),
     }
 }

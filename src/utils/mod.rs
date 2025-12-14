@@ -4,6 +4,8 @@ mod config;
 mod validation;
 mod sorting;
 pub mod cache;
+pub mod scoring;
+pub mod extraction;
 
 pub use config::ConfigManager;
 pub use validation::DependencyChecker;

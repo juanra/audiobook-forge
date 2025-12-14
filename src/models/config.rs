@@ -203,6 +203,9 @@ pub struct MetadataConfig {
     /// Audible metadata integration
     #[serde(default)]
     pub audible: AudibleConfig,
+    /// Matching mode for build command
+    #[serde(default)]
+    pub match_mode: MatchMode,
 }
 
 impl Default for MetadataConfig {
@@ -216,6 +219,7 @@ impl Default for MetadataConfig {
                 "folder.png".to_string(),
             ],
             audible: AudibleConfig::default(),
+            match_mode: MatchMode::default(),
         }
     }
 }
@@ -231,6 +235,24 @@ fn default_cover_filenames() -> Vec<String> {
         "cover.png".to_string(),
         "folder.png".to_string(),
     ]
+}
+
+/// Matching mode for interactive metadata matching during build
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum MatchMode {
+    /// Disabled - don't match during build
+    Disabled,
+    /// Auto - automatically select best match (non-interactive)
+    Auto,
+    /// Interactive - prompt user for each file
+    Interactive,
+}
+
+impl Default for MatchMode {
+    fn default() -> Self {
+        MatchMode::Disabled
+    }
 }
 
 /// Audible metadata integration configuration

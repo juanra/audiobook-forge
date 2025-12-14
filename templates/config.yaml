@@ -59,6 +59,13 @@ metadata:
     - "cover.png"
     - "folder.png"
 
+  # Interactive metadata matching mode during build
+  # Options:
+  #   - disabled: Don't match during build (default)
+  #   - auto: Automatically select best match (non-interactive, fastest)
+  #   - interactive: Prompt user for selection (manual verification)
+  match_mode: "disabled"
+
   # Audible metadata integration
   audible:
     # Enable automatic Audible metadata fetching during build
