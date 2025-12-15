@@ -5,6 +5,107 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2025-12-15
+
+### ✨ Streamlined Match Experience & Enhanced Metadata
+
+This release dramatically improves the user experience of the `match` command and enhances metadata compatibility with audiobook platforms like Audiobookshelf.
+
+### Changed
+
+#### Streamlined Interactive Workflow
+- **BREAKING: Removed redundant confirmation prompt** - Selecting a match option now applies metadata immediately
+  - Previous workflow: Select match → Confirm changes → Apply (2 steps)
+  - New workflow: Select match → Apply (1 step)
+  - **Rationale**: Selecting an option from the match list IS the confirmation - asking again is redundant friction
+  - Impact: Faster workflow, especially when processing multiple files
+  - No `--yes` flag needed - the selection itself is the user's consent
+
+### Added
+
+#### Enhanced Metadata Tags
+- **Added comprehensive metadata tags** for better platform compatibility:
+  - `description` - Subtitle/short description
+  - `longdesc` - Full book synopsis/description
+  - `synopsis` - Extended plot summary
+  - `publisher` - Publisher name (as custom atom)
+  - `asin` - Audible ASIN (as custom atom `com.audible;asin`)
+  - All tags written in MP4/iTunes format for M4B compatibility
+
+#### Better Audiobookshelf Support
+- Metadata now includes all tags expected by Audiobookshelf per their documentation:
+  - `artist` / `album_artist` → Author
+  - `album` / `title` → Title
+  - `composer` → Narrator
+  - `publisher` → Publisher
+  - `asin` → ASIN
+  - `description` / `synopsis` → Description
+  - `date` → Publish Year
+  - `genre` → Genres
+
+### Fixed
+
+#### Interactive Mode Statistics
+- **Fixed match counter** - Now correctly counts processed files instead of marking all as "skipped"
+  - Previous: Selecting matches resulted in "Skipped: 59, Processed: 0"
+  - Now: Correctly shows "Processed: 45, Skipped: 14" when matches are selected
+  - Issue was caused by confirmation prompt failures being counted as skips
+
+### Improved
+
+#### User Experience
+- **Cleaner terminal output** - Removed double-confirmation prompts that caused confusion
+- **Faster batch processing** - One interaction per file instead of two
+- **Better visual feedback** - Success message displays immediately after selection
+- **More intuitive workflow** - Natural feel: see options → pick one → done
+
+#### Metadata Quality
+- **Richer embedded metadata** - Files now contain all available information from Audible
+- **Better platform compatibility** - Enhanced tag coverage for various audiobook players
+- **Proper custom atom format** - Publisher and ASIN written as proper MP4 custom atoms
+
+### Technical Details
+
+#### Files Modified
+- `src/cli/handlers.rs` - Removed confirmation prompt, streamlined selection flow
+- `src/audio/metadata.rs` - Added description, synopsis, publisher, and ASIN tags
+  - Enhanced AtomicParsley commands with additional metadata fields
+  - Added custom rDNS atoms for publisher and ASIN
+  - Fixed comment field to not be overwritten
+
+#### Workflow Comparison
+
+**Before (v2.4.2):**
+```
+1. User sees match candidates
+2. User selects option 1
+3. [Hidden confirmation prompt appears but doesn't render]
+4. [Prompt times out or fails]
+5. File marked as "Skipped"
+```
+
+**After (v2.5.0):**
+```
+1. User sees match candidates
+2. User selects option 1
+3. ✓ Metadata applied successfully
+4. File marked as "Processed"
+```
+
+### Migration Notes
+
+**Interactive Mode Change:**
+- If you relied on the confirmation step as a safety net, note that selecting a match now applies it immediately
+- For bulk operations where you want to review before applying, use `--dry-run` flag
+- The removed confirmation was causing UX issues (not displaying, timing out) and was redundant by design
+
+**Metadata Enhancement:**
+- Existing files can be re-processed to add the new metadata tags
+- No breaking changes to file format - all additions are additive
+- Enhanced tags improve compatibility with Audiobookshelf and other platforms
+
+---
+
 ## [2.4.2] - 2025-12-14
 
 ### 🧹 Code Cleanup

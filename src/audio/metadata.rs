@@ -137,7 +137,12 @@ pub async fn inject_audible_metadata(
         cmd.args(&["--composer", narrator]);
     }
 
-    // Description as comment
+    // Subtitle (if present and not already in title)
+    if let Some(subtitle) = &audible.subtitle {
+        cmd.args(&["--description", subtitle]);
+    }
+
+    // Description/Summary
     if let Some(desc) = &audible.description {
         // Limit description length to avoid issues with AtomicParsley
         let truncated_desc = if desc.len() > 4000 {
@@ -145,7 +150,13 @@ pub async fn inject_audible_metadata(
         } else {
             desc.clone()
         };
+        cmd.args(&["--longdesc", &truncated_desc]);
         cmd.args(&["--comment", &truncated_desc]);
+    }
+
+    // Publisher
+    if let Some(publisher) = &audible.publisher {
+        cmd.args(&["--rDNSatom", &format!("{}", publisher), "name=publisher", "domain=com.apple.iTunes"]);
     }
 
     // Year
@@ -158,14 +169,13 @@ pub async fn inject_audible_metadata(
         cmd.args(&["--genre", genre]);
     }
 
+    // ASIN as custom atom (for Audiobookshelf)
+    cmd.args(&["--rDNSatom", &audible.asin, "name=asin", "domain=com.audible"]);
+
     // Cover art
     if let Some(cover_path) = cover_art {
         cmd.args(&["--artwork", &cover_path.display().to_string()]);
     }
-
-    // Additional metadata as custom tags
-    // Store ASIN as custom field
-    cmd.args(&["--comment", &format!("ASIN: {}", audible.asin)]);
 
     // Overwrite
     cmd.args(&["--overWrite"]);

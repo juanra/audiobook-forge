@@ -5,7 +5,7 @@ use crate::core::{Analyzer, BatchProcessor, Organizer, RetryConfig, Scanner};
 use crate::models::{Config, AudibleRegion, CurrentMetadata, MetadataSource};
 use crate::utils::{ConfigManager, DependencyChecker, AudibleCache, scoring, extraction};
 use crate::audio::{AudibleClient, detect_asin};
-use crate::ui::{prompt_match_selection, confirm_match, prompt_manual_metadata, prompt_custom_search, UserChoice};
+use crate::ui::{prompt_match_selection, prompt_manual_metadata, prompt_custom_search, UserChoice};
 use anyhow::{Context, Result, bail};
 use console::style;
 use std::path::PathBuf;
@@ -877,16 +877,13 @@ async fn process_single_file(
             UserChoice::SelectMatch(idx) => {
                 let selected = &candidates[idx];
 
-                // Confirm selection
-                if confirm_match(&current, selected)? {
-                    if !args.dry_run {
-                        apply_metadata(file_path, &selected.metadata, args, config).await?;
-                    }
-                    return Ok(ProcessResult::Applied);
+                // Apply directly - selecting is confirming
+                if !args.dry_run {
+                    apply_metadata(file_path, &selected.metadata, args, config).await?;
                 } else {
-                    // User cancelled, show menu again
-                    continue;
+                    println!("  {} Dry run - metadata not applied", style("→").yellow());
                 }
+                return Ok(ProcessResult::Applied);
             }
             UserChoice::Skip => {
                 return Ok(ProcessResult::Skipped);
