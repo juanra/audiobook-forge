@@ -75,6 +75,9 @@ pub struct PerformanceConfig {
     /// Encoding quality preset: "fast", "balanced", "high"
     #[serde(default = "default_encoding_preset")]
     pub encoding_preset: String,
+    /// Maximum concurrent file encodings per book (prevents resource exhaustion)
+    #[serde(default = "default_max_concurrent_files_per_book")]
+    pub max_concurrent_files_per_book: String,
 }
 
 impl Default for PerformanceConfig {
@@ -83,6 +86,7 @@ impl Default for PerformanceConfig {
             max_concurrent_encodes: "auto".to_string(),
             enable_parallel_encoding: true,
             encoding_preset: "balanced".to_string(),
+            max_concurrent_files_per_book: "8".to_string(),
         }
     }
 }
@@ -93,6 +97,10 @@ fn default_max_concurrent_encodes() -> String {
 
 fn default_encoding_preset() -> String {
     "balanced".to_string()
+}
+
+fn default_max_concurrent_files_per_book() -> String {
+    "8".to_string()
 }
 
 /// Processing configuration

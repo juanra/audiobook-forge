@@ -7,7 +7,9 @@ use crate::audio::{
 use crate::models::{BookFolder, ProcessingResult};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::Semaphore;
 
 /// Processor for converting a single audiobook
 pub struct Processor {
@@ -15,6 +17,7 @@ pub struct Processor {
     keep_temp: bool,
     use_apple_silicon: bool,
     enable_parallel_encoding: bool,
+    max_concurrent_files: usize,
 }
 
 impl Processor {
@@ -25,16 +28,23 @@ impl Processor {
             keep_temp: false,
             use_apple_silicon: false,
             enable_parallel_encoding: true,
+            max_concurrent_files: 8,
         })
     }
 
     /// Create processor with options
-    pub fn with_options(keep_temp: bool, use_apple_silicon: bool, enable_parallel_encoding: bool) -> Result<Self> {
+    pub fn with_options(
+        keep_temp: bool,
+        use_apple_silicon: bool,
+        enable_parallel_encoding: bool,
+        max_concurrent_files: usize,
+    ) -> Result<Self> {
         Ok(Self {
             ffmpeg: FFmpeg::new()?,
             keep_temp,
             use_apple_silicon,
             enable_parallel_encoding,
+            max_concurrent_files: max_concurrent_files.clamp(1, 32),
         })
     }
 
@@ -109,13 +119,19 @@ impl Processor {
                 .await
                 .context("Failed to concatenate audio files")?;
         } else if self.enable_parallel_encoding && book_folder.tracks.len() > 1 {
-            // Transcode mode - encode files in parallel first, then concatenate
+            // Transcode mode - encode files in parallel with throttling
+            let effective_limit = self.max_concurrent_files.min(book_folder.tracks.len());
+
             tracing::info!(
-                "Using parallel encoding: {} files will be encoded concurrently",
-                book_folder.tracks.len()
+                "Using parallel encoding: {} files with max {} concurrent",
+                book_folder.tracks.len(),
+                effective_limit
             );
 
-            // Step 1: Encode all files to AAC/M4A in parallel
+            // Create semaphore to limit concurrent file encodings
+            let semaphore = Arc::new(Semaphore::new(effective_limit));
+
+            // Step 1: Encode all files to AAC/M4A in parallel (with throttling)
             let mut encoded_files = Vec::new();
             let mut tasks = Vec::new();
 
@@ -128,12 +144,17 @@ impl Processor {
                 let output = temp_output;
                 let quality = quality.clone();
                 let use_apple_silicon = self.use_apple_silicon;
+                let sem = Arc::clone(&semaphore);
 
-                // Spawn parallel encoding task
+                // Spawn parallel encoding task with semaphore
                 let task = tokio::spawn(async move {
+                    // Acquire permit before encoding (blocks if limit reached)
+                    let _permit = sem.acquire().await.unwrap();
+
                     ffmpeg
                         .convert_single_file(&input, &output, &quality, false, use_apple_silicon)
                         .await
+                    // Permit automatically released when _permit drops
                 });
 
                 tasks.push(task);
@@ -141,9 +162,15 @@ impl Processor {
 
             // Wait for all encoding tasks to complete
             for (i, task) in tasks.into_iter().enumerate() {
-                task.await
-                    .context("Task join error")?
-                    .with_context(|| format!("Failed to encode track {}", i))?;
+                match task.await {
+                    Ok(Ok(())) => continue,
+                    Ok(Err(e)) => {
+                        return Err(e).context(format!("Track {} encoding failed", i));
+                    }
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Task {} panicked: {}", i, e));
+                    }
+                }
             }
 
             tracing::info!("All {} files encoded, now concatenating...", encoded_files.len());
@@ -324,9 +351,10 @@ mod tests {
 
     #[test]
     fn test_processor_with_options() {
-        let processor = Processor::with_options(true, true, true).unwrap();
+        let processor = Processor::with_options(true, true, true, 8).unwrap();
         assert!(processor.keep_temp);
         assert!(processor.use_apple_silicon);
+        assert_eq!(processor.max_concurrent_files, 8);
     }
 
     #[test]

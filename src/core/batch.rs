@@ -19,6 +19,8 @@ pub struct BatchProcessor {
     enable_parallel_encoding: bool,
     /// Maximum concurrent encoding operations (to limit CPU usage)
     max_concurrent_encodes: usize,
+    /// Maximum concurrent file encodings per book
+    max_concurrent_files: usize,
     /// Retry configuration
     retry_config: RetryConfig,
 }
@@ -32,6 +34,7 @@ impl BatchProcessor {
             use_apple_silicon: false,
             enable_parallel_encoding: true,
             max_concurrent_encodes: 2, // Default: 2 concurrent encodes
+            max_concurrent_files: 8, // Default: 8 concurrent files per book
             retry_config: RetryConfig::new(),
         }
     }
@@ -43,6 +46,7 @@ impl BatchProcessor {
         use_apple_silicon: bool,
         enable_parallel_encoding: bool,
         max_concurrent_encodes: usize,
+        max_concurrent_files: usize,
         retry_config: RetryConfig,
     ) -> Self {
         Self {
@@ -51,6 +55,7 @@ impl BatchProcessor {
             use_apple_silicon,
             enable_parallel_encoding,
             max_concurrent_encodes: max_concurrent_encodes.clamp(1, 16),
+            max_concurrent_files: max_concurrent_files.clamp(1, 32),
             retry_config,
         }
     }
@@ -91,6 +96,7 @@ impl BatchProcessor {
             let keep_temp = self.keep_temp;
             let use_apple_silicon = self.use_apple_silicon;
             let enable_parallel_encoding = self.enable_parallel_encoding;
+            let max_concurrent_files = self.max_concurrent_files;
             let encode_semaphore = Arc::clone(&encode_semaphore);
             let retry_config = self.retry_config.clone();
 
@@ -114,6 +120,7 @@ impl BatchProcessor {
                         keep_temp,
                         use_apple_silicon,
                         enable_parallel_encoding,
+                        max_concurrent_files,
                     )
                 })
                 .await
@@ -162,8 +169,14 @@ impl BatchProcessor {
         keep_temp: bool,
         use_apple_silicon: bool,
         enable_parallel_encoding: bool,
+        max_concurrent_files: usize,
     ) -> Result<ProcessingResult> {
-        let processor = Processor::with_options(keep_temp, use_apple_silicon, enable_parallel_encoding)?;
+        let processor = Processor::with_options(
+            keep_temp,
+            use_apple_silicon,
+            enable_parallel_encoding,
+            max_concurrent_files,
+        )?;
 
         let result = processor
             .process_book(book, output_dir, chapter_source)
@@ -204,9 +217,10 @@ mod tests {
 
     #[test]
     fn test_batch_processor_with_options() {
-        let processor = BatchProcessor::with_options(8, true, true, true, 4, RetryConfig::new());
+        let processor = BatchProcessor::with_options(8, true, true, true, 4, 8, RetryConfig::new());
         assert_eq!(processor.workers, 8);
         assert_eq!(processor.max_concurrent_encodes, 4);
+        assert_eq!(processor.max_concurrent_files, 8);
         assert!(processor.keep_temp);
         assert!(processor.use_apple_silicon);
     }
@@ -224,10 +238,10 @@ mod tests {
 
     #[test]
     fn test_concurrent_encode_clamping() {
-        let processor = BatchProcessor::with_options(4, false, false, true, 0, RetryConfig::new());
+        let processor = BatchProcessor::with_options(4, false, false, true, 0, 8, RetryConfig::new());
         assert_eq!(processor.max_concurrent_encodes, 1);
 
-        let processor = BatchProcessor::with_options(4, false, false, true, 100, RetryConfig::new());
+        let processor = BatchProcessor::with_options(4, false, false, true, 100, 8, RetryConfig::new());
         assert_eq!(processor.max_concurrent_encodes, 16);
     }
 

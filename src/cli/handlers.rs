@@ -274,6 +274,16 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
             .clamp(1, 16)
     };
 
+    // Parse max concurrent files per book from config
+    let max_concurrent_files = if config.performance.max_concurrent_files_per_book == "auto" {
+        num_cpus::get()
+    } else {
+        config.performance.max_concurrent_files_per_book
+            .parse::<usize>()
+            .unwrap_or(8)
+            .clamp(1, 32)
+    };
+
     // Create retry config from settings
     let retry_config = RetryConfig::with_settings(
         config.processing.max_retries as usize,
@@ -288,6 +298,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
         use_apple_silicon,
         config.performance.enable_parallel_encoding,
         max_concurrent,
+        max_concurrent_files,
         retry_config,
     );
 
@@ -877,6 +888,14 @@ async fn process_single_file(
             UserChoice::SelectMatch(idx) => {
                 let selected = &candidates[idx];
 
+                // Show what's about to be applied
+                println!(
+                    "  {} Applying: {} by {}",
+                    style("→").cyan(),
+                    style(&selected.metadata.title).yellow(),
+                    style(selected.metadata.authors.first().map(|a| a.name.as_str()).unwrap_or("Unknown")).cyan()
+                );
+
                 // Apply directly - selecting is confirming
                 if !args.dry_run {
                     apply_metadata(file_path, &selected.metadata, args, config).await?;
@@ -991,7 +1010,15 @@ async fn apply_metadata(
     // Inject metadata
     crate::audio::inject_audible_metadata(file_path, metadata, cover_path.as_deref()).await?;
 
-    println!("  {} Metadata applied successfully", style("✓").green());
+    println!(
+        "  {} Metadata applied successfully{}",
+        style("✓").green(),
+        if cover_path.is_some() {
+            " (including cover art)"
+        } else {
+            ""
+        }
+    );
 
     Ok(())
 }
@@ -1008,17 +1035,17 @@ fn prompt_no_results_action() -> Result<NoResultsAction> {
     use inquire::Select;
 
     let options = vec![
-        "Enter metadata manually",
-        "Search with different terms",
-        "Skip this file",
+        "[S]kip this file",
+        "Search with [D]ifferent terms",
+        "Enter metadata [M]anually",
     ];
 
     let selection = Select::new("What would you like to do?", options).prompt()?;
 
     match selection {
-        "Enter metadata manually" => Ok(NoResultsAction::ManualEntry),
-        "Search with different terms" => Ok(NoResultsAction::CustomSearch),
-        "Skip this file" => Ok(NoResultsAction::Skip),
+        "[S]kip this file" => Ok(NoResultsAction::Skip),
+        "Search with [D]ifferent terms" => Ok(NoResultsAction::CustomSearch),
+        "Enter metadata [M]anually" => Ok(NoResultsAction::ManualEntry),
         _ => Ok(NoResultsAction::Skip),
     }
 }

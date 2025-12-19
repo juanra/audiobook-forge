@@ -72,13 +72,24 @@ pub fn prompt_match_selection(
         .prompt()?;
 
     // Parse selection
-    if let Some(first_char) = selection.chars().next() {
-        if first_char.is_ascii_digit() {
-            let index: usize = first_char.to_digit(10).unwrap() as usize - 1;
-            return Ok(UserChoice::SelectMatch(index));
+    // Find first digit in the selection string (skipping any ANSI color codes)
+    for (idx, ch) in selection.chars().enumerate() {
+        if ch.is_ascii_digit() {
+            let digit = ch.to_digit(10).unwrap() as usize;
+            // Validate it's a valid candidate index
+            if digit >= 1 && digit <= candidates.len() {
+                return Ok(UserChoice::SelectMatch(digit - 1));
+            }
+            // If we found a digit but it's not valid, stop searching
+            break;
+        }
+        // Stop searching after first 20 characters to avoid matching digits in titles
+        if idx >= 20 {
+            break;
         }
     }
 
+    // Check for action options
     if selection.contains("[S]") {
         Ok(UserChoice::Skip)
     } else if selection.contains("[M]") {

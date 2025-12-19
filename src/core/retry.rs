@@ -136,16 +136,51 @@ pub fn classify_error(error: &anyhow::Error) -> ErrorType {
         || error_msg.contains("temporarily unavailable")
         || error_msg.contains("too many open files")
         || error_msg.contains("resource temporarily unavailable")
+        || error_msg.contains("resource deadlock")
+        || error_msg.contains("try again")
     {
         return ErrorType::Transient;
     }
 
-    // Permanent errors (no point retrying)
+    // Permanent errors - File system issues
     if error_msg.contains("file not found")
+        || error_msg.contains("no such file")
         || error_msg.contains("permission denied")
-        || error_msg.contains("invalid")
-        || error_msg.contains("unsupported")
-        || error_msg.contains("corrupted")
+        || error_msg.contains("access denied")
+        || error_msg.contains("read-only")
+        || error_msg.contains("disk full")
+        || error_msg.contains("no space left")
+    {
+        return ErrorType::Permanent;
+    }
+
+    // Permanent errors - FFmpeg codec/format issues
+    if error_msg.contains("invalid data found")
+        || error_msg.contains("codec not found")
+        || error_msg.contains("unsupported codec")
+        || error_msg.contains("unknown codec")
+        || error_msg.contains("invalid audio")
+        || error_msg.contains("invalid sample rate")
+        || error_msg.contains("invalid bit rate")
+        || error_msg.contains("invalid channel")
+        || error_msg.contains("not supported")
+        || error_msg.contains("does not contain any stream")
+        || error_msg.contains("no decoder")
+        || error_msg.contains("no encoder")
+        || error_msg.contains("moov atom not found")
+        || error_msg.contains("invalid argument")
+        || error_msg.contains("protocol not found")
+    {
+        return ErrorType::Permanent;
+    }
+
+    // Permanent errors - Data corruption
+    if error_msg.contains("corrupted")
+        || error_msg.contains("corrupt")
+        || error_msg.contains("truncated")
+        || error_msg.contains("header missing")
+        || error_msg.contains("malformed")
+        || error_msg.contains("end of file")
     {
         return ErrorType::Permanent;
     }
@@ -178,22 +213,28 @@ where
                     return Err(e);
                 }
 
-                last_error = Some(e);
-
                 if attempt < config.max_retries {
                     let delay = config.calculate_delay(attempt);
                     tracing::warn!(
-                        "Transient error (attempt {}), retrying in {:?}...",
+                        "Transient error on attempt {}: {}",
                         attempt + 1,
-                        delay
+                        e
+                    );
+                    tracing::warn!(
+                        "Retrying in {:?}... ({} attempts remaining)",
+                        delay,
+                        config.max_retries - attempt
                     );
                     sleep(delay).await;
                 } else {
                     tracing::error!(
-                        "All {} retry attempts failed for transient error",
-                        config.max_retries + 1
+                        "All {} retry attempts exhausted. Final error: {}",
+                        config.max_retries + 1,
+                        e
                     );
                 }
+
+                last_error = Some(e);
             }
         }
     }

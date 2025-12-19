@@ -5,6 +5,158 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2025-12-19
+
+### 🔧 Error Handling & Resource Management Fixes
+
+This release fixes critical error handling issues and adds resource throttling to prevent system overload during parallel encoding.
+
+### Fixed
+
+#### Error Messages & Debugging
+- **Fixed missing FFmpeg error details** - Users now see complete FFmpeg stderr output instead of generic "Failed to encode track 0" messages
+  - Error context is preserved through the async task boundary
+  - Pattern matching replaces `.with_context()` to maintain full error chain
+  - Example: Now shows "Track 0 encoding failed: FFmpeg conversion failed: [detailed stderr]"
+  - Resolves GitHub Issue #1
+
+#### Error Retry Logic
+- **Fixed over-aggressive retry behavior** - FFmpeg encoding errors are now correctly classified as permanent
+  - Added 20+ FFmpeg-specific error patterns (codec errors, format issues, corruption)
+  - Organized error classification by category: File System, FFmpeg Codec/Format, Data Corruption
+  - Permanent errors (corrupted files, invalid codecs, etc.) no longer retry
+  - Saves time by immediately failing on non-recoverable errors
+
+#### Error Visibility
+- **Added detailed error logging during retries** - Users now see what error occurred on each retry attempt
+  - Previous: "Transient error (attempt 1), retrying in 1s..."
+  - Now: "Transient error on attempt 1: [full error details]"
+  - Shows remaining retry attempts: "Retrying in 1s... (2 attempts remaining)"
+  - Better troubleshooting experience
+
+### Added
+
+#### Resource Throttling
+- **New config option: `max_concurrent_files_per_book`** (default: 8)
+  - Prevents resource exhaustion when encoding books with many files (e.g., 40 MP3s)
+  - Before: 40 files = 40 concurrent FFmpeg processes × ~4 threads = 160 threads → System overload
+  - After: 40 files = max 8 concurrent FFmpeg × ~4 threads = 32 threads → Predictable, safe
+  - Configurable: Set to "auto" for num_cpus, or specific number (1-32)
+  - Example config:
+    ```yaml
+    performance:
+      max_concurrent_files_per_book: "8"  # or "auto"
+    ```
+
+#### Semaphore-Based Concurrency Control
+- **Implemented per-book file encoding throttling** using tokio::sync::Semaphore
+  - Limits concurrent FFmpeg processes within a single book
+  - Works alongside existing `max_concurrent_encodes` (which limits concurrent books)
+  - Two-level concurrency control: Books level + Files level
+  - Prevents "too many open files" and "resource temporarily unavailable" errors
+
+### Improved
+
+#### Error Classification
+- **Enhanced error type detection** with comprehensive FFmpeg pattern matching:
+  - **Transient errors**: timeout, connection issues, resource deadlock, "try again"
+  - **Permanent - File system**: file not found, permission denied, disk full, no space left
+  - **Permanent - FFmpeg codec**: invalid data, codec not found, unsupported codec, no decoder/encoder
+  - **Permanent - Corruption**: corrupted, truncated, malformed, header missing
+  - Conservative default: Unknown errors still treated as transient (safe fallback)
+
+#### Logging & Observability
+- **Better progress feedback** for parallel encoding:
+  - Shows: "Using parallel encoding: 40 files with max 8 concurrent" (previously just "40 files concurrently")
+  - Clear visibility into throttling behavior
+  - Helps users understand performance characteristics
+
+### Performance Impact
+
+#### Individual Book Processing
+- **Slower with throttling**: ~2-3x longer for large books (acceptable trade-off for reliability)
+  - Example: 40-file book might take 90s instead of 30s
+  - But: No more system crashes or resource exhaustion
+
+#### Overall Reliability
+- **Dramatic improvement** in stability:
+  - No more "too many open files" errors
+  - Predictable memory and CPU usage
+  - Multiple books can process in parallel without conflicts
+  - Users can set `max_concurrent_files_per_book: "auto"` on powerful systems for best performance
+
+### Configuration Updates
+
+New configuration section in `config.yaml`:
+
+```yaml
+performance:
+  max_concurrent_encodes: "auto"           # Concurrent books (batch level)
+  max_concurrent_files_per_book: "8"      # NEW - Concurrent files per book
+  enable_parallel_encoding: true
+  encoding_preset: "balanced"
+```
+
+**Backward Compatible**: Missing field defaults to "8" (safe default).
+
+### Technical Details
+
+#### Files Modified
+- `src/models/config.rs` - Added `max_concurrent_files_per_book` field to PerformanceConfig
+- `src/core/processor.rs` - Implemented semaphore throttling, improved error handling
+  - Added `Arc<Semaphore>` for concurrency control
+  - Replaced `.with_context()` with pattern matching for error preservation
+  - Updated constructors to accept `max_concurrent_files` parameter
+- `src/core/retry.rs` - Enhanced error classification and logging
+  - Added 20+ FFmpeg-specific error patterns
+  - Improved retry logging with full error details
+  - Better classification by error category
+- `src/core/batch.rs` - Thread max_concurrent_files through call stack
+  - Added field to BatchProcessor struct
+  - Updated constructors and process_single_book signature
+- `src/cli/handlers.rs` - Parse new config option and pass to batch processor
+  - Parse `max_concurrent_files_per_book` from config
+  - Support "auto" and numeric values (1-32)
+
+#### Error Handling Changes
+**Before:**
+```rust
+task.await.context("Task join error")?
+    .with_context(|| format!("Failed to encode track {}", i))?;
+// Result: Only "Failed to encode track 0" shown to user
+```
+
+**After:**
+```rust
+match task.await {
+    Ok(Ok(())) => continue,
+    Ok(Err(e)) => return Err(e).context(format!("Track {} encoding failed", i)),
+    Err(e) => return Err(anyhow::anyhow!("Task {} panicked: {}", i, e)),
+}
+// Result: Full FFmpeg stderr preserved and shown to user
+```
+
+### Migration Notes
+
+**New Users**: No action needed. Default throttling (8 concurrent files) is safe for most systems.
+
+**Power Users**: Adjust `max_concurrent_files_per_book` in config.yaml:
+- **Laptops/Low-power**: Set to "4" for lower resource usage
+- **Workstations (16+ cores)**: Set to "auto" or "16" for maximum speed
+- **Default (8)**: Good balance for most desktop systems (8-16 cores)
+
+**Debugging**: Error messages are now much more verbose - this is intentional for better troubleshooting.
+
+### Upgrade from 2.5.0
+
+1. Update audiobook-forge: `cargo install audiobook-forge --force`
+2. (Optional) Add to config.yaml:
+   ```yaml
+   performance:
+     max_concurrent_files_per_book: "8"  # or adjust to your preference
+   ```
+3. Enjoy improved error messages and more stable parallel encoding!
+
 ## [2.5.0] - 2025-12-15
 
 ### ✨ Streamlined Match Experience & Enhanced Metadata
