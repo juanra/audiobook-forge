@@ -209,14 +209,14 @@ where
                 let error_type = classify_error(&e);
 
                 if error_type == ErrorType::Permanent {
-                    tracing::error!("Permanent error detected, not retrying: {}", e);
+                    tracing::error!("Permanent error detected, not retrying: {:?}", e);
                     return Err(e);
                 }
 
                 if attempt < config.max_retries {
                     let delay = config.calculate_delay(attempt);
                     tracing::warn!(
-                        "Transient error on attempt {}: {}",
+                        "Transient error on attempt {}: {:?}",
                         attempt + 1,
                         e
                     );
@@ -228,7 +228,7 @@ where
                     sleep(delay).await;
                 } else {
                     tracing::error!(
-                        "All {} retry attempts exhausted. Final error: {}",
+                        "All {} retry attempts exhausted. Final error: {:?}",
                         config.max_retries + 1,
                         e
                     );

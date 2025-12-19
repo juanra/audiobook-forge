@@ -5,6 +5,27 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.2] - 2025-12-19
+
+### 🐛 Fixed
+
+#### Error Display in Logs
+- **Fixed error logging to show full error chain** - Error messages now display complete FFmpeg stderr output in logs
+  - Changed error formatting from `{}` to `{:?}` to show full error chain instead of only outermost message
+  - Affects retry logs, batch processing logs, and metadata fetch logs
+  - Users now see: `"Track 0 encoding failed: FFmpeg conversion failed: [detailed FFmpeg stderr]"`
+  - Previously only showed: `"Track 0 encoding failed"` without underlying cause
+  - Completes the fix started in v2.5.1 for GitHub Issue #1
+
+### 📝 Technical Details
+
+The v2.5.1 release fixed error preservation through the async task boundary, but errors were still only showing their outermost message in logs due to using the `Display` trait (`{}`). This release switches to the `Debug` trait (`{:?}`) which shows the full anyhow error chain, making the complete FFmpeg stderr visible to users.
+
+**Files modified:**
+- `src/core/retry.rs` - 3 error log statements (transient, permanent, exhausted retries)
+- `src/core/batch.rs` - 2 error log statements (batch failures)
+- `src/cli/handlers.rs` - 3 error log statements (metadata fetch failures)
+
 ## [2.5.1] - 2025-12-19
 
 ### 🔧 Error Handling & Resource Management Fixes

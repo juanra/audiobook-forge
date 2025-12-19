@@ -181,7 +181,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                                 println!("  {} {} (ASIN: {})", style("✓").green(), book.name, asin);
                             }
                             Err(e) => {
-                                tracing::warn!("Failed to fetch metadata for {}: {}", book.name, e);
+                                tracing::warn!("Failed to fetch metadata for {}: {:?}", book.name, e);
                                 println!("  {} {} - fetch failed", style("⚠").yellow(), book.name);
                             }
                         }
@@ -213,7 +213,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                                         println!("  {} {} (matched: {})", style("✓").green(), book.name, asin);
                                     }
                                     Err(e) => {
-                                        tracing::warn!("Failed to fetch metadata after match for {}: {}", book.name, e);
+                                        tracing::warn!("Failed to fetch metadata after match for {}: {:?}", book.name, e);
                                         println!("  {} {} - fetch failed", style("⚠").yellow(), book.name);
                                     }
                                 }
@@ -225,7 +225,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                         println!("  {} {} - no match found", style("○").dim(), book.name);
                     }
                     Err(e) => {
-                        tracing::warn!("Search failed for {}: {}", book.name, e);
+                        tracing::warn!("Search failed for {}: {:?}", book.name, e);
                         println!("  {} {} - search failed", style("⚠").yellow(), book.name);
                     }
                 }

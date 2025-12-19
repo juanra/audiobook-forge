@@ -126,9 +126,9 @@ impl BatchProcessor {
                 .await
                 .unwrap_or_else(|e| {
                     // If all retries fail, return a failure result
-                    tracing::error!("✗ {}: {}", book.name, e);
+                    tracing::error!("✗ {}: {:?}", book.name, e);
                     ProcessingResult::new(book.name.clone())
-                        .failure(format!("All retries failed: {}", e), 0.0)
+                        .failure(format!("All retries failed: {:?}", e), 0.0)
                 });
 
                 // Send result through channel
