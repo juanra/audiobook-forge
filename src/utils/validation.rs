@@ -151,6 +151,19 @@ impl DependencyChecker {
             false
         }
     }
+
+    /// Get all available AAC encoders
+    pub fn get_available_encoders() -> Vec<String> {
+        crate::audio::EncoderDetector::get_available_encoders()
+            .into_iter()
+            .map(|e| e.name().to_string())
+            .collect()
+    }
+
+    /// Get the currently selected AAC encoder
+    pub fn get_selected_encoder() -> String {
+        crate::audio::get_encoder().name().to_string()
+    }
 }
 
 impl std::fmt::Display for DependencyStatus {

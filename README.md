@@ -94,7 +94,7 @@ When downloading audiobooks, they often come as **multiple separate MP3 files** 
 - **🖼️ Cover Art**: Automatically detects and embeds cover images
 - **🔄 Batch Operations**: Process entire libraries with a single command
 - **⚡ Copy Mode**: Ultra-fast concatenation without re-encoding when possible
-- **🍎 Hardware Acceleration**: Apple Silicon encoder support (aac_at)
+- **🎯 Smart Encoder Selection**: Automatic AAC encoder detection with fallback (aac_at → libfdk_aac → aac)
 - **🔁 Error Recovery**: Automatic retry with configurable settings
 - **📊 Progress Tracking**: Real-time progress with ETA calculation
 - **🗂️ Auto-Organization**: Organize books into M4B and To_Convert folders
@@ -766,7 +766,7 @@ metadata:
 
 # Advanced Settings
 advanced:
-  use_apple_silicon_encoder: true  # Use Apple Silicon hardware encoder (aac_at)
+  aac_encoder: "auto"  # AAC encoder: "auto", "aac_at", "libfdk_aac", "aac" (auto-detects best available)
 ```
 
 **Override config with CLI flags:**

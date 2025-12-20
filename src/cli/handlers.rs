@@ -4,12 +4,59 @@ use crate::cli::commands::{BuildArgs, ConfigCommands, OrganizeArgs, MetadataComm
 use crate::core::{Analyzer, BatchProcessor, Organizer, RetryConfig, Scanner};
 use crate::models::{Config, AudibleRegion, CurrentMetadata, MetadataSource};
 use crate::utils::{ConfigManager, DependencyChecker, AudibleCache, scoring, extraction};
-use crate::audio::{AudibleClient, detect_asin};
+use crate::audio::{AacEncoder, AudibleClient, detect_asin};
 use crate::ui::{prompt_match_selection, prompt_manual_metadata, prompt_custom_search, UserChoice};
 use anyhow::{Context, Result, bail};
 use console::style;
 use std::path::PathBuf;
 use std::str::FromStr;
+
+/// Resolve which AAC encoder to use based on config (handles backward compatibility)
+fn resolve_encoder(config: &Config, cli_override: Option<&str>) -> AacEncoder {
+    // CLI argument takes highest priority
+    if let Some(encoder_str) = cli_override {
+        if let Some(encoder) = AacEncoder::from_str(encoder_str) {
+            tracing::info!("Using encoder from CLI argument: {}", encoder.name());
+            return encoder;
+        } else {
+            tracing::warn!("Unknown encoder '{}', falling back to auto-detection", encoder_str);
+        }
+    }
+
+    // Handle backward compatibility with old use_apple_silicon_encoder field
+    if let Some(use_apple_silicon) = config.advanced.use_apple_silicon_encoder {
+        let encoder = if use_apple_silicon {
+            AacEncoder::AppleSilicon
+        } else {
+            AacEncoder::Native
+        };
+        tracing::info!("Using encoder from legacy config: {}", encoder.name());
+        return encoder;
+    }
+
+    // Use new aac_encoder field
+    match config.advanced.aac_encoder.to_lowercase().as_str() {
+        "auto" => {
+            let encoder = crate::audio::get_encoder();
+            tracing::info!("Auto-detected encoder: {}", encoder.name());
+            encoder
+        }
+        encoder_str => {
+            if let Some(encoder) = AacEncoder::from_str(encoder_str) {
+                tracing::info!("Using configured encoder: {}", encoder.name());
+                encoder
+            } else {
+                tracing::warn!(
+                    "Unknown encoder '{}' in config, falling back to auto-detection",
+                    encoder_str
+                );
+                let encoder = crate::audio::get_encoder();
+                tracing::info!("Auto-detected encoder: {}", encoder.name());
+                encoder
+            }
+        }
+    }
+}
 
 /// Try to detect if current directory is an audiobook folder
 fn try_detect_current_as_audiobook() -> Result<Option<PathBuf>> {
@@ -261,8 +308,8 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     let workers = args.parallel.unwrap_or(config.processing.parallel_workers) as usize;
     let keep_temp = args.keep_temp || config.processing.keep_temp_files;
 
-    // Use Apple Silicon encoder if configured, otherwise auto-detect
-    let use_apple_silicon = config.advanced.use_apple_silicon_encoder.unwrap_or(true);
+    // Resolve encoder (handles backward compatibility with legacy config)
+    let encoder = resolve_encoder(&config, args.aac_encoder.as_deref());
 
     // Parse max concurrent encodes from config
     let max_concurrent = if config.performance.max_concurrent_encodes == "auto" {
@@ -295,7 +342,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     let batch_processor = BatchProcessor::with_options(
         workers,
         keep_temp,
-        use_apple_silicon,
+        encoder,
         config.performance.enable_parallel_encoding,
         max_concurrent,
         max_concurrent_files,
@@ -530,6 +577,27 @@ pub fn handle_check() -> Result<()> {
     for (tool, found) in &results {
         if *found {
             println!("  {} {}", style("✓").green(), style(tool).cyan());
+
+            // Show encoder information for FFmpeg
+            if *tool == "FFmpeg" {
+                let available_encoders = DependencyChecker::get_available_encoders();
+                let selected_encoder = DependencyChecker::get_selected_encoder();
+
+                if !available_encoders.is_empty() {
+                    print!("    AAC Encoders: ");
+                    for (i, encoder) in available_encoders.iter().enumerate() {
+                        if i > 0 {
+                            print!(", ");
+                        }
+                        if *encoder == selected_encoder {
+                            print!("{} {}", style(encoder).green(), style("(selected)").dim());
+                        } else {
+                            print!("{}", style(encoder).dim());
+                        }
+                    }
+                    println!();
+                }
+            }
         } else {
             println!("  {} {} (not found)", style("✗").red(), style(tool).yellow());
         }

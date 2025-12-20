@@ -2,7 +2,7 @@
 
 use crate::audio::{
     generate_chapters_from_files, inject_chapters_mp4box, inject_metadata_atomicparsley,
-    parse_cue_file, write_mp4box_chapters, FFmpeg,
+    parse_cue_file, write_mp4box_chapters, AacEncoder, FFmpeg,
 };
 use crate::models::{BookFolder, ProcessingResult};
 use anyhow::{Context, Result};
@@ -15,7 +15,7 @@ use tokio::sync::Semaphore;
 pub struct Processor {
     ffmpeg: FFmpeg,
     keep_temp: bool,
-    use_apple_silicon: bool,
+    encoder: AacEncoder,
     enable_parallel_encoding: bool,
     max_concurrent_files: usize,
 }
@@ -26,7 +26,7 @@ impl Processor {
         Ok(Self {
             ffmpeg: FFmpeg::new()?,
             keep_temp: false,
-            use_apple_silicon: false,
+            encoder: crate::audio::get_encoder(),
             enable_parallel_encoding: true,
             max_concurrent_files: 8,
         })
@@ -35,14 +35,14 @@ impl Processor {
     /// Create processor with options
     pub fn with_options(
         keep_temp: bool,
-        use_apple_silicon: bool,
+        encoder: AacEncoder,
         enable_parallel_encoding: bool,
         max_concurrent_files: usize,
     ) -> Result<Self> {
         Ok(Self {
             ffmpeg: FFmpeg::new()?,
             keep_temp,
-            use_apple_silicon,
+            encoder,
             enable_parallel_encoding,
             max_concurrent_files: max_concurrent_files.clamp(1, 32),
         })
@@ -94,7 +94,7 @@ impl Processor {
                     &output_path,
                     quality,
                     use_copy,
-                    self.use_apple_silicon,
+                    self.encoder,
                 )
                 .await
                 .context("Failed to convert audio file")?;
@@ -114,7 +114,7 @@ impl Processor {
                     &output_path,
                     quality,
                     use_copy,
-                    self.use_apple_silicon,
+                    self.encoder,
                 )
                 .await
                 .context("Failed to concatenate audio files")?;
@@ -143,7 +143,7 @@ impl Processor {
                 let input = track.file_path.clone();
                 let output = temp_output;
                 let quality = quality.clone();
-                let use_apple_silicon = self.use_apple_silicon;
+                let encoder = self.encoder;
                 let sem = Arc::clone(&semaphore);
 
                 // Spawn parallel encoding task with semaphore
@@ -152,7 +152,7 @@ impl Processor {
                     let _permit = sem.acquire().await.unwrap();
 
                     ffmpeg
-                        .convert_single_file(&input, &output, &quality, false, use_apple_silicon)
+                        .convert_single_file(&input, &output, &quality, false, encoder)
                         .await
                     // Permit automatically released when _permit drops
                 });
@@ -186,7 +186,7 @@ impl Processor {
                     &output_path,
                     quality,
                     true, // use copy mode for concatenation
-                    self.use_apple_silicon,
+                    self.encoder,
                 )
                 .await
                 .context("Failed to concatenate encoded files")?;
@@ -208,7 +208,7 @@ impl Processor {
                     &output_path,
                     quality,
                     false, // transcode mode
-                    self.use_apple_silicon,
+                    self.encoder,
                 )
                 .await
                 .context("Failed to concatenate audio files")?;
@@ -351,9 +351,9 @@ mod tests {
 
     #[test]
     fn test_processor_with_options() {
-        let processor = Processor::with_options(true, true, true, 8).unwrap();
+        let processor = Processor::with_options(true, AacEncoder::AppleSilicon, true, 8).unwrap();
         assert!(processor.keep_temp);
-        assert!(processor.use_apple_silicon);
+        assert_eq!(processor.encoder, AacEncoder::AppleSilicon);
         assert_eq!(processor.max_concurrent_files, 8);
     }
 

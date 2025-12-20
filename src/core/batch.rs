@@ -1,5 +1,6 @@
 //! Batch processor for parallel audiobook processing
 
+use crate::audio::AacEncoder;
 use crate::core::{Processor, RetryConfig, smart_retry_async};
 use crate::models::{BookFolder, ProcessingResult};
 use anyhow::Result;
@@ -13,8 +14,8 @@ pub struct BatchProcessor {
     workers: usize,
     /// Keep temporary files for debugging
     keep_temp: bool,
-    /// Use Apple Silicon hardware encoder
-    use_apple_silicon: bool,
+    /// AAC encoder to use
+    encoder: AacEncoder,
     /// Enable parallel file encoding
     enable_parallel_encoding: bool,
     /// Maximum concurrent encoding operations (to limit CPU usage)
@@ -31,7 +32,7 @@ impl BatchProcessor {
         Self {
             workers: workers.clamp(1, 16),
             keep_temp: false,
-            use_apple_silicon: false,
+            encoder: crate::audio::get_encoder(),
             enable_parallel_encoding: true,
             max_concurrent_encodes: 2, // Default: 2 concurrent encodes
             max_concurrent_files: 8, // Default: 8 concurrent files per book
@@ -43,7 +44,7 @@ impl BatchProcessor {
     pub fn with_options(
         workers: usize,
         keep_temp: bool,
-        use_apple_silicon: bool,
+        encoder: AacEncoder,
         enable_parallel_encoding: bool,
         max_concurrent_encodes: usize,
         max_concurrent_files: usize,
@@ -52,7 +53,7 @@ impl BatchProcessor {
         Self {
             workers: workers.clamp(1, 16),
             keep_temp,
-            use_apple_silicon,
+            encoder,
             enable_parallel_encoding,
             max_concurrent_encodes: max_concurrent_encodes.clamp(1, 16),
             max_concurrent_files: max_concurrent_files.clamp(1, 32),
@@ -94,7 +95,7 @@ impl BatchProcessor {
             let output_dir = output_dir.to_path_buf();
             let chapter_source = chapter_source.to_string();
             let keep_temp = self.keep_temp;
-            let use_apple_silicon = self.use_apple_silicon;
+            let encoder = self.encoder;
             let enable_parallel_encoding = self.enable_parallel_encoding;
             let max_concurrent_files = self.max_concurrent_files;
             let encode_semaphore = Arc::clone(&encode_semaphore);
@@ -118,7 +119,7 @@ impl BatchProcessor {
                         &output_dir,
                         &chapter_source,
                         keep_temp,
-                        use_apple_silicon,
+                        encoder,
                         enable_parallel_encoding,
                         max_concurrent_files,
                     )
@@ -167,13 +168,13 @@ impl BatchProcessor {
         output_dir: &Path,
         chapter_source: &str,
         keep_temp: bool,
-        use_apple_silicon: bool,
+        encoder: AacEncoder,
         enable_parallel_encoding: bool,
         max_concurrent_files: usize,
     ) -> Result<ProcessingResult> {
         let processor = Processor::with_options(
             keep_temp,
-            use_apple_silicon,
+            encoder,
             enable_parallel_encoding,
             max_concurrent_files,
         )?;
@@ -212,17 +213,18 @@ mod tests {
         assert_eq!(processor.workers, 4);
         assert_eq!(processor.max_concurrent_encodes, 2);
         assert!(!processor.keep_temp);
-        assert!(!processor.use_apple_silicon);
+        // Encoder is auto-detected, just verify it's one of the valid options
+        assert!(matches!(processor.encoder, AacEncoder::AppleSilicon | AacEncoder::LibFdk | AacEncoder::Native));
     }
 
     #[test]
     fn test_batch_processor_with_options() {
-        let processor = BatchProcessor::with_options(8, true, true, true, 4, 8, RetryConfig::new());
+        let processor = BatchProcessor::with_options(8, true, AacEncoder::AppleSilicon, true, 4, 8, RetryConfig::new());
         assert_eq!(processor.workers, 8);
         assert_eq!(processor.max_concurrent_encodes, 4);
         assert_eq!(processor.max_concurrent_files, 8);
         assert!(processor.keep_temp);
-        assert!(processor.use_apple_silicon);
+        assert_eq!(processor.encoder, AacEncoder::AppleSilicon);
     }
 
     #[test]
@@ -238,10 +240,10 @@ mod tests {
 
     #[test]
     fn test_concurrent_encode_clamping() {
-        let processor = BatchProcessor::with_options(4, false, false, true, 0, 8, RetryConfig::new());
+        let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 0, 8, RetryConfig::new());
         assert_eq!(processor.max_concurrent_encodes, 1);
 
-        let processor = BatchProcessor::with_options(4, false, false, true, 100, 8, RetryConfig::new());
+        let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 100, 8, RetryConfig::new());
         assert_eq!(processor.max_concurrent_encodes, 16);
     }
 

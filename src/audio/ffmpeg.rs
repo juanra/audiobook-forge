@@ -1,5 +1,6 @@
 //! FFmpeg wrapper for audio operations
 
+use crate::audio::AacEncoder;
 use crate::models::QualityProfile;
 use anyhow::{Context, Result};
 use serde_json::Value;
@@ -130,7 +131,7 @@ impl FFmpeg {
         output_file: &Path,
         quality: &QualityProfile,
         use_copy: bool,
-        use_apple_silicon: bool,
+        encoder: AacEncoder,
     ) -> Result<()> {
         let mut cmd = Command::new(&self.ffmpeg_path);
 
@@ -150,17 +151,15 @@ impl FFmpeg {
             cmd.args(&["-c", "copy"]);
         } else {
             // Transcode mode
-            let encoder = if use_apple_silicon { "aac_at" } else { "aac" };
             cmd.args(&[
-                "-c:a", encoder,
+                "-c:a", encoder.name(),
                 "-b:a", &format!("{}k", quality.bitrate),
                 "-ar", &quality.sample_rate.to_string(),
                 "-ac", &quality.channels.to_string(),
             ]);
 
-            // Use multiple threads for encoding (auto = use all available cores)
-            if !use_apple_silicon {
-                // Standard aac encoder benefits from threading
+            // Use multiple threads for encoding if encoder supports it
+            if encoder.supports_threading() {
                 cmd.args(&["-threads", "0"]); // 0 = auto-detect optimal thread count
             }
         }
@@ -179,6 +178,14 @@ impl FFmpeg {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            // Provide helpful error message if encoder is the issue
+            if stderr.to_lowercase().contains("encoder") {
+                anyhow::bail!(
+                    "FFmpeg encoding failed with encoder '{}': {}\nTip: Run 'audiobook-forge check' to verify encoder availability",
+                    encoder.name(),
+                    stderr
+                );
+            }
             anyhow::bail!("FFmpeg concatenation failed: {}", stderr);
         }
 
@@ -192,7 +199,7 @@ impl FFmpeg {
         output_file: &Path,
         quality: &QualityProfile,
         use_copy: bool,
-        use_apple_silicon: bool,
+        encoder: AacEncoder,
     ) -> Result<()> {
         let mut cmd = Command::new(&self.ffmpeg_path);
 
@@ -205,17 +212,15 @@ impl FFmpeg {
         if use_copy {
             cmd.args(&["-c", "copy"]);
         } else {
-            let encoder = if use_apple_silicon { "aac_at" } else { "aac" };
             cmd.args(&[
-                "-c:a", encoder,
+                "-c:a", encoder.name(),
                 "-b:a", &format!("{}k", quality.bitrate),
                 "-ar", &quality.sample_rate.to_string(),
                 "-ac", &quality.channels.to_string(),
             ]);
 
-            // Use multiple threads for encoding (auto = use all available cores)
-            if !use_apple_silicon {
-                // Standard aac encoder benefits from threading
+            // Use multiple threads for encoding if encoder supports it
+            if encoder.supports_threading() {
                 cmd.args(&["-threads", "0"]); // 0 = auto-detect optimal thread count
             }
         }
@@ -232,6 +237,14 @@ impl FFmpeg {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            // Provide helpful error message if encoder is the issue
+            if stderr.to_lowercase().contains("encoder") {
+                anyhow::bail!(
+                    "FFmpeg encoding failed with encoder '{}': {}\nTip: Run 'audiobook-forge check' to verify encoder availability",
+                    encoder.name(),
+                    stderr
+                );
+            }
             anyhow::bail!("FFmpeg conversion failed: {}", stderr);
         }
 

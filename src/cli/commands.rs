@@ -110,8 +110,12 @@ pub struct BuildArgs {
     #[arg(long)]
     pub delete_originals: bool,
 
-    /// Use Apple Silicon encoder (aac_at)
+    /// AAC encoder to use (auto, aac_at, libfdk_aac, aac)
     #[arg(long)]
+    pub aac_encoder: Option<String>,
+
+    /// DEPRECATED: Use --aac-encoder instead
+    #[arg(long, hide = true)]
     pub use_apple_silicon_encoder: Option<bool>,
 
     /// Fetch metadata from Audible during build

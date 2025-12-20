@@ -366,6 +366,10 @@ fn default_log_level() -> String {
     "INFO".to_string()
 }
 
+fn default_aac_encoder() -> String {
+    "auto".to_string()
+}
+
 /// Advanced configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdvancedConfig {
@@ -377,8 +381,13 @@ pub struct AdvancedConfig {
     pub mp4box_path: Option<PathBuf>,
     /// Custom temporary files location
     pub temp_directory: Option<PathBuf>,
+    /// DEPRECATED: Use aac_encoder instead
     /// Use Apple Silicon hardware encoder (aac_at)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub use_apple_silicon_encoder: Option<bool>,
+    /// AAC encoder preference: "auto", "aac_at", "libfdk_aac", "aac"
+    #[serde(default = "default_aac_encoder")]
+    pub aac_encoder: String,
 }
 
 impl Default for AdvancedConfig {
@@ -389,6 +398,7 @@ impl Default for AdvancedConfig {
             mp4box_path: None,
             temp_directory: None,
             use_apple_silicon_encoder: None,
+            aac_encoder: default_aac_encoder(),
         }
     }
 }

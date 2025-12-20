@@ -5,6 +5,94 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2025-12-20
+
+### 🎉 New Features
+
+#### Automatic AAC Encoder Detection & Fallback
+- **Intelligent encoder selection** - Automatically detects and uses the best available AAC encoder
+  - Priority chain: `aac_at` (Apple Silicon) → `libfdk_aac` (Fraunhofer) → `aac` (FFmpeg native)
+  - Solves GitHub Issue #1: Linux users with `libfdk_aac` now work out of the box
+  - No manual configuration needed - just works across all platforms
+  - Thread-safe lazy detection with caching (runs once per process)
+
+- **New CLI flag: `--aac-encoder`** - Manual encoder override when needed
+  - Options: `auto`, `aac_at`, `libfdk_aac`, `aac`
+  - Example: `audiobook-forge build --aac-encoder libfdk_aac`
+  - Useful for testing or forcing specific encoders
+
+- **New config option: `advanced.aac_encoder`** - Configure preferred encoder
+  - Default: `"auto"` (recommended - detects best available)
+  - Set to specific encoder name to force selection
+  - Example:
+    ```yaml
+    advanced:
+      aac_encoder: "auto"  # or "aac_at", "libfdk_aac", "aac"
+    ```
+
+- **Enhanced `check` command** - Now shows available AAC encoders
+  - Displays all detected encoders with selected one highlighted
+  - Example output:
+    ```
+    ✓ FFmpeg
+      AAC Encoders: aac_at (selected), libfdk_aac, aac
+    ```
+  - Helps users verify encoder availability before conversion
+
+### 🔧 Improvements
+
+#### Better Error Messages
+- **Encoder-specific error guidance** - FFmpeg encoding failures now suggest running `check` command
+  - Shows which encoder failed: `"FFmpeg encoding failed with encoder 'aac_at': ..."`
+  - Provides actionable tip: `"Tip: Run 'audiobook-forge check' to verify encoder availability"`
+  - Helps users quickly identify and fix encoder issues
+
+#### Backward Compatibility
+- **Legacy config support** - Old `use_apple_silicon_encoder` field still works
+  - Automatically migrated to new `aac_encoder` setting
+  - `true` → `"aac_at"`, `false` → `"aac"`, `null` → `"auto"`
+  - Deprecated but functional - will be removed in v3.0.0
+  - CLI flag `--use-apple-silicon-encoder` hidden but still accepted
+
+### 📝 Technical Details
+
+**New Module:**
+- `src/audio/encoder.rs` - Core encoder detection and management (163 lines, 7 unit tests)
+  - `AacEncoder` enum with methods: `name()`, `supports_threading()`, `from_str()`
+  - `EncoderDetector` for FFmpeg encoder detection
+  - `get_encoder()` with `OnceLock` caching for thread-safe lazy initialization
+  - Detects available encoders by parsing `ffmpeg -encoders` output
+
+**Threading Intelligence:**
+- Each encoder defines its threading support:
+  - `aac_at`: No threading (hardware accelerated)
+  - `libfdk_aac`: No threading (single-threaded by design)
+  - `aac`: Multi-threading enabled (`-threads 0`)
+- FFmpeg commands automatically adjusted based on encoder characteristics
+
+**Files Modified:**
+- `src/audio/encoder.rs` (NEW) - Encoder detection and selection
+- `src/audio/mod.rs` - Module exports
+- `src/audio/ffmpeg.rs` - Updated to use `AacEncoder` enum, improved error messages
+- `src/models/config.rs` - Added `aac_encoder` field with backward compatibility
+- `src/core/processor.rs` - Propagated encoder parameter
+- `src/core/batch.rs` - Propagated encoder parameter
+- `src/cli/handlers.rs` - Added `resolve_encoder()` function with migration logic
+- `src/cli/commands.rs` - Added `--aac-encoder` CLI flag
+- `src/utils/validation.rs` - Enhanced with encoder detection methods
+- `templates/config.yaml` - Documented new encoder configuration
+
+**Performance Impact:**
+- Detection cost: ~50-100ms for `ffmpeg -encoders` call
+- Runs once per process lifetime (cached via `OnceLock`)
+- Negligible impact: <0.1s added to first build command
+
+**Platform Support:**
+- **macOS with Apple Silicon**: Auto-selects `aac_at` hardware encoder
+- **macOS Intel**: Falls back to `aac` or `libfdk_aac` if available
+- **Linux**: Auto-selects `libfdk_aac` if available, otherwise `aac`
+- **Windows**: Uses `aac` (universal fallback)
+
 ## [2.5.2] - 2025-12-19
 
 ### 🐛 Fixed

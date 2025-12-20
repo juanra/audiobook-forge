@@ -132,6 +132,15 @@ advanced:
   # Custom directory for temporary files (system temp if null)
   temp_directory: null
 
-  # Use Apple Silicon hardware encoder (aac_at) - auto-detected if null
-  # Only works on Apple Silicon Macs
-  use_apple_silicon_encoder: null
+  # AAC encoder selection
+  # Options:
+  #   - "auto": Automatically detect and use the best available encoder (recommended)
+  #   - "aac_at": Apple Silicon hardware encoder (macOS with Apple Silicon only)
+  #   - "libfdk_aac": High-quality Fraunhofer AAC encoder (requires FFmpeg build with libfdk-aac)
+  #   - "aac": FFmpeg native AAC encoder (universal fallback, available on all platforms)
+  # Priority order: aac_at → libfdk_aac → aac
+  aac_encoder: "auto"
+
+  # DEPRECATED: Use aac_encoder instead
+  # This field is kept for backward compatibility and will be removed in a future version
+  # use_apple_silicon_encoder: null
