@@ -74,7 +74,7 @@ When downloading audiobooks, they often come as **multiple separate MP3 files** 
 - **📁 Auto-Detect Current Directory**: Run from inside audiobook folders without `--root` parameter
 - **⚡ Parallel File Encoding**: Encode files concurrently for **3.8x faster** processing (121s → 32s)
 - **🚀 Parallel Book Processing**: Convert multiple audiobooks simultaneously with intelligent resource management
-- **🎯 Smart Quality Detection**: Automatically detects and preserves the best audio quality
+- **🎯 Smart Quality Detection**: Automatically detects and preserves source audio quality
 - **📖 Chapter Generation**: Multiple sources (files, CUE sheets, auto-detection)
 - **🎨 Metadata Management**: Extracts and enhances metadata from ID3 and M4A tags
 - **🎭 Interactive Metadata Matching** (v2.4.1 - Enhanced, v2.4.0 - Fixed, v2.3.0 - Introduced): BEETS-inspired interactive matching system
@@ -208,7 +208,13 @@ audiobook-forge build [OPTIONS]
 - `--root <PATH>` - Root directory containing audiobook(s) (optional; auto-detects current directory if omitted)
 - `--parallel <N>` - Number of parallel workers (default: CPU cores / 2)
 - `--skip-existing` - Skip audiobooks that already have M4B files (default: true)
-- `--quality <PRESET>` - Quality preset: low, medium, high, source (default: source)
+- `--quality <PRESET>` - Quality preset: low, medium, high, ultra, maximum, source (default: source)
+  - `low` - 64kbps, 22050Hz, mono (smallest file size)
+  - `medium` - 96kbps, 44100Hz, stereo (balanced quality/size)
+  - `high` - 128kbps, 48000Hz, stereo (premium audiobook quality)
+  - `ultra` - 192kbps, 48000Hz, stereo (for music/theatrical productions)
+  - `maximum` - 256kbps, 48000Hz, stereo (near-lossless quality)
+  - `source` - Auto-detect from source files (default)
 - `--output <PATH>` - Output directory (default: same as source)
 - `-v, --verbose` - Verbose logging
 
@@ -967,12 +973,17 @@ audiobook-forge build --root "/path/Book 2"
 
 **Solution:**
 ```bash
-# Use source quality (default)
+# First, check your source file quality
+ffmpeg -i input.mp3
+
+# The default preserves source quality (no upsampling/downsampling)
 audiobook-forge build --root /path --quality source
 
-# Check original quality
-ffmpeg -i input.mp3
+# Note: Using a higher quality preset won't improve quality
+# that doesn't exist in the source files
 ```
+
+**Important:** The tool preserves whatever quality exists in your source files. If your source is already compressed (e.g., 64kbps), encoding at a higher bitrate won't improve quality - it will just create a larger file with the same audio quality.
 
 ---
 

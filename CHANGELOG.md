@@ -5,6 +5,21 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.3] - 2025-12-20
+
+### 📝 Documentation
+
+#### README Updates
+- **Quality presets documentation** - Updated README to document `ultra` and `maximum` presets
+  - Added detailed descriptions of all quality presets with bitrate/sample rate specs
+  - Clarified troubleshooting section to explain quality presets don't improve source quality
+  - Fixed misleading language: "Smart Quality Detection" now says "preserves source audio quality"
+  - Added important note: Higher bitrate presets won't improve quality that doesn't exist in source
+  - Ensures documentation matches implementation and sets accurate expectations
+
+**Files Modified:**
+- `README.md` - Updated quality preset documentation and clarified quality preservation behavior
+
 ## [2.6.2] - 2025-12-20
 
 ### 🎉 New Features
