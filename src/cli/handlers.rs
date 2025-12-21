@@ -346,6 +346,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
         config.performance.enable_parallel_encoding,
         max_concurrent,
         max_concurrent_files,
+        args.quality.clone(),
         retry_config,
     );
 

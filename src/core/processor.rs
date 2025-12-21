@@ -18,6 +18,7 @@ pub struct Processor {
     encoder: AacEncoder,
     enable_parallel_encoding: bool,
     max_concurrent_files: usize,
+    quality_preset: Option<String>,
 }
 
 impl Processor {
@@ -29,6 +30,7 @@ impl Processor {
             encoder: crate::audio::get_encoder(),
             enable_parallel_encoding: true,
             max_concurrent_files: 8,
+            quality_preset: None,
         })
     }
 
@@ -38,6 +40,7 @@ impl Processor {
         encoder: AacEncoder,
         enable_parallel_encoding: bool,
         max_concurrent_files: usize,
+        quality_preset: Option<String>,
     ) -> Result<Self> {
         Ok(Self {
             ffmpeg: FFmpeg::new()?,
@@ -45,6 +48,7 @@ impl Processor {
             encoder,
             enable_parallel_encoding,
             max_concurrent_files: max_concurrent_files.clamp(1, 32),
+            quality_preset,
         })
     }
 
@@ -81,10 +85,17 @@ impl Processor {
             use_copy
         );
 
-        // Get quality profile
-        let quality = book_folder
+        // Get quality profile (auto-detected from source)
+        let mut quality = book_folder
             .get_best_quality_profile(true)
-            .context("No tracks found")?;
+            .context("No tracks found")?
+            .clone();
+
+        // Apply quality preset override if specified
+        if let Some(ref preset) = self.quality_preset {
+            quality = quality.apply_preset(Some(preset.as_str()));
+            tracing::info!("Applying quality preset '{}': {}", preset, quality);
+        }
 
         if book_folder.tracks.len() == 1 {
             // Single file - just convert
@@ -92,7 +103,7 @@ impl Processor {
                 .convert_single_file(
                     &book_folder.tracks[0].file_path,
                     &output_path,
-                    quality,
+                    &quality,
                     use_copy,
                     self.encoder,
                 )
@@ -112,7 +123,7 @@ impl Processor {
                 .concat_audio_files(
                     &concat_file,
                     &output_path,
-                    quality,
+                    &quality,
                     use_copy,
                     self.encoder,
                 )
@@ -184,7 +195,7 @@ impl Processor {
                 .concat_audio_files(
                     &concat_file,
                     &output_path,
-                    quality,
+                    &quality,
                     true, // use copy mode for concatenation
                     self.encoder,
                 )
@@ -206,7 +217,7 @@ impl Processor {
                 .concat_audio_files(
                     &concat_file,
                     &output_path,
-                    quality,
+                    &quality,
                     false, // transcode mode
                     self.encoder,
                 )
@@ -351,10 +362,14 @@ mod tests {
 
     #[test]
     fn test_processor_with_options() {
-        let processor = Processor::with_options(true, AacEncoder::AppleSilicon, true, 8).unwrap();
+        let processor = Processor::with_options(true, AacEncoder::AppleSilicon, true, 8, None).unwrap();
         assert!(processor.keep_temp);
         assert_eq!(processor.encoder, AacEncoder::AppleSilicon);
         assert_eq!(processor.max_concurrent_files, 8);
+        assert_eq!(processor.quality_preset, None);
+
+        let processor_with_preset = Processor::with_options(false, AacEncoder::Native, true, 4, Some("high".to_string())).unwrap();
+        assert_eq!(processor_with_preset.quality_preset, Some("high".to_string()));
     }
 
     #[test]

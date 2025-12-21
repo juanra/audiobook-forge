@@ -93,6 +93,42 @@ impl QualityProfile {
             duration: self.duration,
         }
     }
+
+    /// Create a quality profile from a preset
+    /// Returns None for "source" preset (auto-detect from source files)
+    pub fn from_preset(preset: &str, source: &QualityProfile) -> Option<QualityProfile> {
+        match preset.to_lowercase().as_str() {
+            "low" => Some(QualityProfile {
+                bitrate: 64,
+                sample_rate: 22050,
+                channels: 1, // mono
+                codec: "aac".to_string(),
+                duration: source.duration,
+            }),
+            "medium" => Some(QualityProfile {
+                bitrate: 96,
+                sample_rate: 44100,
+                channels: 2, // stereo
+                codec: "aac".to_string(),
+                duration: source.duration,
+            }),
+            "high" => Some(QualityProfile {
+                bitrate: 128,
+                sample_rate: 48000,
+                channels: 2, // stereo
+                codec: "aac".to_string(),
+                duration: source.duration,
+            }),
+            "source" | _ => None, // Use auto-detected quality from source
+        }
+    }
+
+    /// Apply quality preset override if specified
+    pub fn apply_preset(&self, preset: Option<&str>) -> QualityProfile {
+        preset
+            .and_then(|p| Self::from_preset(p, self))
+            .unwrap_or_else(|| self.clone())
+    }
 }
 
 impl fmt::Display for QualityProfile {

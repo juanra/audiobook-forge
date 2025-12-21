@@ -22,6 +22,8 @@ pub struct BatchProcessor {
     max_concurrent_encodes: usize,
     /// Maximum concurrent file encodings per book
     max_concurrent_files: usize,
+    /// Quality preset override
+    quality_preset: Option<String>,
     /// Retry configuration
     retry_config: RetryConfig,
 }
@@ -36,6 +38,7 @@ impl BatchProcessor {
             enable_parallel_encoding: true,
             max_concurrent_encodes: 2, // Default: 2 concurrent encodes
             max_concurrent_files: 8, // Default: 8 concurrent files per book
+            quality_preset: None,
             retry_config: RetryConfig::new(),
         }
     }
@@ -48,6 +51,7 @@ impl BatchProcessor {
         enable_parallel_encoding: bool,
         max_concurrent_encodes: usize,
         max_concurrent_files: usize,
+        quality_preset: Option<String>,
         retry_config: RetryConfig,
     ) -> Self {
         Self {
@@ -57,6 +61,7 @@ impl BatchProcessor {
             enable_parallel_encoding,
             max_concurrent_encodes: max_concurrent_encodes.clamp(1, 16),
             max_concurrent_files: max_concurrent_files.clamp(1, 32),
+            quality_preset,
             retry_config,
         }
     }
@@ -98,6 +103,7 @@ impl BatchProcessor {
             let encoder = self.encoder;
             let enable_parallel_encoding = self.enable_parallel_encoding;
             let max_concurrent_files = self.max_concurrent_files;
+            let quality_preset = self.quality_preset.clone();
             let encode_semaphore = Arc::clone(&encode_semaphore);
             let retry_config = self.retry_config.clone();
 
@@ -122,6 +128,7 @@ impl BatchProcessor {
                         encoder,
                         enable_parallel_encoding,
                         max_concurrent_files,
+                        quality_preset.clone(),
                     )
                 })
                 .await
@@ -171,12 +178,14 @@ impl BatchProcessor {
         encoder: AacEncoder,
         enable_parallel_encoding: bool,
         max_concurrent_files: usize,
+        quality_preset: Option<String>,
     ) -> Result<ProcessingResult> {
         let processor = Processor::with_options(
             keep_temp,
             encoder,
             enable_parallel_encoding,
             max_concurrent_files,
+            quality_preset,
         )?;
 
         let result = processor
@@ -219,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_batch_processor_with_options() {
-        let processor = BatchProcessor::with_options(8, true, AacEncoder::AppleSilicon, true, 4, 8, RetryConfig::new());
+        let processor = BatchProcessor::with_options(8, true, AacEncoder::AppleSilicon, true, 4, 8, None, RetryConfig::new());
         assert_eq!(processor.workers, 8);
         assert_eq!(processor.max_concurrent_encodes, 4);
         assert_eq!(processor.max_concurrent_files, 8);
@@ -240,10 +249,10 @@ mod tests {
 
     #[test]
     fn test_concurrent_encode_clamping() {
-        let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 0, 8, RetryConfig::new());
+        let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 0, 8, None, RetryConfig::new());
         assert_eq!(processor.max_concurrent_encodes, 1);
 
-        let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 100, 8, RetryConfig::new());
+        let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 100, 8, None, RetryConfig::new());
         assert_eq!(processor.max_concurrent_encodes, 16);
     }
 

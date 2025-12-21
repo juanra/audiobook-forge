@@ -5,6 +5,42 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1] - 2025-12-20
+
+### 🎉 New Features
+
+#### Quality Preset Override
+- **New CLI flag: `--quality`** - Override output audio quality with presets
+  - Options: `low`, `medium`, `high`, `source`
+  - `low`: 64kbps, 22050Hz, mono (smallest file size)
+  - `medium`: 96kbps, 44100Hz, stereo (balanced quality/size)
+  - `high`: 128kbps, 48000Hz, stereo (best quality)
+  - `source`: Auto-detect from source files (default)
+  - Example: `audiobook-forge build --quality medium`
+  - Fixes GitHub Issue #2: Documented flag now actually exists
+
+### 🐛 Fixed
+
+#### Documentation Accuracy
+- **CLI flags audit** - All documented flags now exist in implementation
+  - Previously, `--quality` was documented in README but not implemented
+  - Conducted full audit to ensure README matches actual CLI behavior
+
+### 📝 Technical Details
+
+**Files Modified:**
+- `src/models/quality.rs` - Added `from_preset()` and `apply_preset()` methods
+- `src/core/processor.rs` - Added quality preset override logic
+- `src/core/batch.rs` - Propagated quality preset parameter
+- `src/cli/commands.rs` - Added `--quality` CLI flag
+- `src/cli/handlers.rs` - Connected CLI flag to processing pipeline
+
+**Quality Profile Behavior:**
+- Auto-detection happens first (from source files)
+- If `--quality` flag is provided, it overrides the auto-detected quality
+- Preset presets preserved source duration and codec ("aac")
+- Quality preset applies to all books in batch processing
+
 ## [2.6.0] - 2025-12-20
 
 ### 🎉 New Features
