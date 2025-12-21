@@ -119,6 +119,20 @@ impl QualityProfile {
                 codec: "aac".to_string(),
                 duration: source.duration,
             }),
+            "ultra" => Some(QualityProfile {
+                bitrate: 192,
+                sample_rate: 48000,
+                channels: 2, // stereo
+                codec: "aac".to_string(),
+                duration: source.duration,
+            }),
+            "maximum" => Some(QualityProfile {
+                bitrate: 256,
+                sample_rate: 48000,
+                channels: 2, // stereo
+                codec: "aac".to_string(),
+                duration: source.duration,
+            }),
             "source" | _ => None, // Use auto-detected quality from source
         }
     }

@@ -5,6 +5,36 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2025-12-20
+
+### 🎉 New Features
+
+#### Higher Quality Presets
+- **New quality presets: `ultra` and `maximum`** - For premium audiobook quality
+  - `ultra` - 192kbps, 48000Hz, stereo (for music/theatrical productions)
+  - `maximum` - 256kbps, 48000Hz, stereo (near-lossless quality)
+  - Existing presets unchanged: `low` (64kbps), `medium` (96kbps), `high` (128kbps)
+
+**Complete Quality Preset Options:**
+- `low` - 64kbps, 22050Hz, mono (smallest file size)
+- `medium` - 96kbps, 44100Hz, stereo (balanced quality/size)
+- `high` - 128kbps, 48000Hz, stereo (premium audiobook quality)
+- `ultra` - 192kbps, 48000Hz, stereo (for music/theatrical productions)
+- `maximum` - 256kbps, 48000Hz, stereo (near-lossless quality)
+- `source` - Auto-detect from source files (default)
+
+**Usage:**
+```bash
+audiobook-forge build --quality ultra
+audiobook-forge build --quality maximum
+```
+
+### 📝 Technical Details
+
+**Files Modified:**
+- `src/models/quality.rs` - Added `ultra` and `maximum` preset cases
+- `src/cli/commands.rs` - Updated value_parser to accept new presets
+
 ## [2.6.1] - 2025-12-20
 
 ### 🎉 New Features

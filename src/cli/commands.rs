@@ -111,7 +111,7 @@ pub struct BuildArgs {
     pub delete_originals: bool,
 
     /// Quality preset for output audio
-    #[arg(long, value_parser = ["low", "medium", "high", "source"])]
+    #[arg(long, value_parser = ["low", "medium", "high", "ultra", "maximum", "source"])]
     pub quality: Option<String>,
 
     /// AAC encoder to use (auto, aac_at, libfdk_aac, aac)
