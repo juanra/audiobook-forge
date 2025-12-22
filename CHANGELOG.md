@@ -7,6 +7,76 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2025-12-21
+
+### 🐛 Fixed
+
+#### Auto-Detection for Book Folders (Issue #3)
+- **Fixed --root parameter detection** - Now works when pointing directly to audiobook folder
+  - Previously failed: `audiobook-forge build --root "/path/to/My Book"`
+  - Now auto-detects when --root points to a book folder (not a library folder)
+  - Lowered detection threshold from 2 to 1 audio file (supports single-file audiobooks)
+  - Added `is_audiobook_folder()` helper function for directory classification
+  - Fixed GitHub Issue #3: "No files found when --root is a book folder"
+
+#### File Logging Implementation (Issue #4)
+- **Implemented file logging** - Config options now work as documented
+  - Added `tracing-appender` dependency for file logging with daily rotation
+  - Config options (`log_to_file`, `log_file`, `log_level`) now fully functional
+  - Default log location: `~/.audiobook-forge/logs/audiobook-forge.log`
+  - Supports both console and file logging simultaneously
+  - Fixed GitHub Issue #4: "Logging to file not working"
+
+### 🎉 New Features
+
+#### Verbose Progress Logging
+- **Enhanced logging throughout processing pipeline** - Track every step with detailed progress
+  - Shows FFmpeg commands at DEBUG level (useful for troubleshooting)
+  - File-by-file encoding progress with duration estimates
+  - Chapter injection status with count and completion messages
+  - Metadata injection logging with AtomicParsley commands
+  - Processing time tracking (start/completion with elapsed time)
+  - INFO level: User-facing progress updates
+  - DEBUG level: Technical details including full commands
+
+**Example Verbose Output:**
+```
+[2025-12-21 10:30:45] INFO  === Starting book processing: The Great Audiobook ===
+[2025-12-21 10:30:45] INFO  [1/12] Encoding: chapter1.mp3 (25.3 min)
+[2025-12-21 10:30:52] INFO  [2/12] Encoding: chapter2.mp3 (18.7 min)
+[2025-12-21 10:35:15] INFO  All 12 files encoded, now concatenating...
+[2025-12-21 10:38:42] INFO  Injecting 12 chapters using MP4Box
+[2025-12-21 10:38:43] INFO  ✓ Chapter injection complete
+[2025-12-21 10:38:43] INFO  Injecting metadata using AtomicParsley
+[2025-12-21 10:38:44] INFO  ✓ Metadata injection complete
+[2025-12-21 10:38:44] INFO  === Completed: The Great Audiobook in 479.2s ===
+```
+
+**Enable Verbose Logging:**
+```bash
+# Console only (INFO level)
+audiobook-forge build --verbose
+
+# To file (configure in ~/.audiobook-forge/config.yaml)
+log_to_file: true
+log_level: DEBUG  # or INFO, WARNING, ERROR
+```
+
+### 📝 Technical Details
+
+**Files Modified:**
+- `src/cli/handlers.rs` - Fixed auto-detection logic (lines 86-135)
+- `src/main.rs` - Implemented layered file logging (lines 56-123)
+- `src/core/processor.rs` - Added progress logging at all key steps
+- `src/audio/ffmpeg.rs` - Added FFmpeg command logging
+- `src/audio/metadata.rs` - Added AtomicParsley command logging
+- `src/audio/chapters.rs` - Added chapter generation logging
+- `Cargo.toml` - Added tracing-appender dependency
+
+**Issue References:**
+- Fixes #3: No files found when --root is a book folder
+- Fixes #4: Logging to file not working
+
 ## [2.6.4] - 2025-12-20
 
 ### 📝 Documentation

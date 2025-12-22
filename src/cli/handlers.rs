@@ -83,19 +83,56 @@ fn try_detect_current_as_audiobook() -> Result<Option<PathBuf>> {
         })
         .count();
 
-    // Require at least 2 MP3 files to consider it an audiobook (BookCase A)
-    if mp3_count >= 2 {
+    // Require at least 1 MP3 file to consider it an audiobook (BookCase A or B)
+    if mp3_count >= 1 {
         Ok(Some(current_dir))
     } else {
         Ok(None)
     }
 }
 
+/// Check if a directory is itself an audiobook folder
+fn is_audiobook_folder(path: &std::path::Path) -> Result<bool> {
+    if !path.is_dir() {
+        return Ok(false);
+    }
+
+    let entries = std::fs::read_dir(path)
+        .context("Failed to read directory")?;
+
+    let audio_count = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| {
+                    ext.eq_ignore_ascii_case("mp3") ||
+                    ext.eq_ignore_ascii_case("m4a") ||
+                    ext.eq_ignore_ascii_case("m4b")
+                })
+                .unwrap_or(false)
+        })
+        .count();
+
+    Ok(audio_count >= 1)
+}
+
 /// Handle the build command
 pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     // Determine root directory (CLI arg > config > auto-detect > error)
     let (root, auto_detected) = if let Some(root_path) = args.root.or(config.directories.source.clone()) {
-        (root_path, false)
+        // Check if root itself is an audiobook folder
+        if is_audiobook_folder(&root_path)? {
+            println!(
+                "{} Detected audiobook folder (not library): {}",
+                style("→").cyan(),
+                style(root_path.display()).yellow()
+            );
+            (root_path, true)
+        } else {
+            (root_path, false)
+        }
     } else {
         // Try auto-detecting current directory
         if let Some(current) = try_detect_current_as_audiobook()? {

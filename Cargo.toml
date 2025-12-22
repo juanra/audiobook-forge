@@ -1,6 +1,6 @@
 [package]
 name = "audiobook-forge"
-version = "2.6.4"
+version = "2.7.0"
 edition = "2021"
 authors = ["Audiobook Forge Contributors"]
 license = "MIT"
@@ -56,6 +56,7 @@ thiserror = "1.0"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 
 # File system utilities
 walkdir = "2.4"

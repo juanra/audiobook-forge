@@ -62,6 +62,8 @@ impl Processor {
         let start_time = Instant::now();
         let result = ProcessingResult::new(book_folder.name.clone());
 
+        tracing::info!("=== Starting book processing: {} ===", book_folder.name);
+
         // Create output directory if it doesn't exist
         if !output_dir.exists() {
             std::fs::create_dir_all(output_dir)
@@ -150,6 +152,14 @@ impl Processor {
                 let temp_output = temp_dir.join(format!("encoded_{:04}.m4a", i));
                 encoded_files.push(temp_output.clone());
 
+                tracing::info!(
+                    "[{}/{}] Encoding: {} ({:.1} min)",
+                    i + 1,
+                    book_folder.tracks.len(),
+                    track.file_path.file_name().unwrap().to_string_lossy(),
+                    track.quality.duration / 60.0
+                );
+
                 let ffmpeg = self.ffmpeg.clone();
                 let input = track.file_path.clone();
                 let output = temp_output;
@@ -231,6 +241,8 @@ impl Processor {
         let chapters = self.generate_chapters(book_folder, chapter_source)?;
 
         if !chapters.is_empty() {
+            tracing::info!("Injecting {} chapters using MP4Box", chapters.len());
+
             let chapters_file = temp_dir.join("chapters.txt");
             write_mp4box_chapters(&chapters, &chapters_file)
                 .context("Failed to write chapter file")?;
@@ -239,7 +251,7 @@ impl Processor {
                 .await
                 .context("Failed to inject chapters")?;
 
-            tracing::info!("Injected {} chapters", chapters.len());
+            tracing::info!("✓ Chapter injection complete");
         }
 
         // Step 4: Inject metadata
@@ -247,6 +259,13 @@ impl Processor {
         let artist = book_folder.get_album_artist();
         let year = book_folder.get_year();
         let genre = book_folder.get_genre();
+
+        tracing::info!("Injecting metadata using AtomicParsley");
+        tracing::debug!(
+            "Metadata: title={:?}, artist={:?}",
+            title,
+            artist
+        );
 
         inject_metadata_atomicparsley(
             &output_path,
@@ -260,7 +279,7 @@ impl Processor {
         .await
         .context("Failed to inject metadata")?;
 
-        tracing::info!("Metadata injection complete");
+        tracing::info!("✓ Metadata injection complete");
 
         // Clean up temp directory
         if !self.keep_temp {
@@ -271,6 +290,12 @@ impl Processor {
 
         // Calculate processing time
         let processing_time = start_time.elapsed().as_secs_f64();
+
+        tracing::info!(
+            "=== Completed: {} in {:.1}s ===",
+            book_folder.name,
+            processing_time
+        );
 
         // Return success result
         Ok(result.success(output_path, processing_time, use_copy))

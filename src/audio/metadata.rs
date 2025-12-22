@@ -93,6 +93,9 @@ pub async fn inject_metadata_atomicparsley(
 
     cmd.args(&["--overWrite"]);
 
+    // Log command for debugging
+    tracing::debug!("AtomicParsley command: {:?}", cmd.as_std());
+
     let output = cmd
         .output()
         .await

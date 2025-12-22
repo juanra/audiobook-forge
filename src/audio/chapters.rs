@@ -57,6 +57,8 @@ pub fn generate_chapters_from_files(
     files: &[&Path],
     durations: &[f64], // Duration in seconds for each file
 ) -> Vec<Chapter> {
+    tracing::debug!("Generating chapters from {} files", files.len());
+
     let mut chapters = Vec::new();
     let mut current_time_ms: u64 = 0;
 
@@ -78,6 +80,8 @@ pub fn generate_chapters_from_files(
         chapters.push(chapter);
         current_time_ms += duration_ms;
     }
+
+    tracing::debug!("Generated {} chapters", chapters.len());
 
     chapters
 }

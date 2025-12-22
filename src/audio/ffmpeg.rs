@@ -168,6 +168,14 @@ impl FFmpeg {
         cmd.args(&["-movflags", "+faststart"]);
         cmd.arg(output_file);
 
+        // Log command for debugging
+        tracing::debug!("FFmpeg concat command: {:?}", cmd.as_std());
+        tracing::info!(
+            "Concatenating {} ({}mode)",
+            concat_file.display(),
+            if use_copy { "copy " } else { "transcode " }
+        );
+
         // Execute command
         let output = cmd
             .stdout(Stdio::piped())
@@ -227,6 +235,16 @@ impl FFmpeg {
 
         cmd.args(&["-movflags", "+faststart"]);
         cmd.arg(output_file);
+
+        // Log command for debugging
+        tracing::debug!("FFmpeg convert command: {:?}", cmd.as_std());
+        tracing::info!(
+            "Converting {} → {} (encoder: {}, {}kbps)",
+            input_file.file_name().unwrap().to_string_lossy(),
+            output_file.file_name().unwrap().to_string_lossy(),
+            encoder.name(),
+            quality.bitrate
+        );
 
         let output = cmd
             .stdout(Stdio::piped())
