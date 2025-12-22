@@ -1197,6 +1197,22 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ---
 
+## 💖 Support This Project
+
+If you find **audiobook-forge** useful, please consider supporting its development!
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/juanra)
+
+Your sponsorship helps:
+- 🚀 **Active Development**: Keep the project maintained and add new features
+- 🐛 **Bug Fixes**: Respond quickly to issues and edge cases
+- 📚 **Documentation**: Maintain comprehensive guides and examples
+- 🆓 **Free & Open Source**: Keep audiobook-forge free for everyone
+
+Every contribution, no matter the size, is deeply appreciated and helps sustain this project! 🙏
+
+---
+
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/juanra/audiobook-forge/issues)
