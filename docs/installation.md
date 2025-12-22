@@ -18,10 +18,18 @@ Before installing Audiobook Forge, you need:
 The easiest way to install Audiobook Forge is using Cargo:
 
 ```bash
-cargo install --git https://github.com/juanra/audiobook-forge
+cargo install audiobook-forge
 ```
 
-This will download, compile, and install the latest version from the repository.
+This will download, compile, and install the latest stable version from [crates.io](https://crates.io/crates/audiobook-forge).
+
+### Latest Development Version
+
+To install the latest development version from GitHub:
+
+```bash
+cargo install --git https://github.com/juanra/audiobook-forge
+```
 
 ### From Source
 

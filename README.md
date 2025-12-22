@@ -81,7 +81,7 @@ Every contribution, no matter the size, is deeply appreciated! 🙏
 ### Quick Install
 
 ```bash
-cargo install --git https://github.com/juanra/audiobook-forge
+cargo install audiobook-forge
 ```
 
 ### Dependencies
