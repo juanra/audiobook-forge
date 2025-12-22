@@ -14,7 +14,7 @@ pub mod audible;
 pub mod encoder;
 
 pub use ffmpeg::FFmpeg;
-pub use metadata::{extract_metadata, extract_mp3_metadata, extract_m4a_metadata, inject_metadata_atomicparsley, inject_audible_metadata};
+pub use metadata::{extract_metadata, extract_mp3_metadata, extract_m4a_metadata, inject_metadata_atomicparsley, inject_audible_metadata, extract_embedded_cover};
 pub use chapters::{Chapter, generate_chapters_from_files, parse_cue_file, write_mp4box_chapters, inject_chapters_mp4box};
 pub use audible::{AudibleClient, detect_asin, clean_sequence};
 pub use encoder::{AacEncoder, get_encoder, EncoderDetector};

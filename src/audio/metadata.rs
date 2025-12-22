@@ -59,6 +59,73 @@ pub fn extract_metadata(track: &mut Track) -> Result<()> {
     }
 }
 
+/// Extract embedded cover art from MP3 file (APIC frame)
+pub fn extract_mp3_cover_art(file_path: &Path, output_path: &Path) -> Result<bool> {
+    let tag = id3::Tag::read_from_path(file_path)
+        .context("Failed to read ID3 tag")?;
+
+    // Collect pictures to avoid borrow checker issues
+    let pictures: Vec<_> = tag.pictures().collect();
+
+    // Get first picture (APIC frame)
+    if let Some(picture) = pictures.first() {
+        tracing::debug!(
+            "Extracting embedded cover from MP3: {} ({} bytes, type: {:?})",
+            file_path.display(),
+            picture.data.len(),
+            picture.picture_type
+        );
+
+        std::fs::write(output_path, &picture.data)
+            .context("Failed to write extracted cover")?;
+
+        Ok(true)
+    } else {
+        tracing::debug!("No embedded cover found in MP3: {}", file_path.display());
+        Ok(false)
+    }
+}
+
+/// Extract embedded cover art from M4A/M4B file
+pub fn extract_m4a_cover_art(file_path: &Path, output_path: &Path) -> Result<bool> {
+    let tag = mp4ameta::Tag::read_from_path(file_path)
+        .context("Failed to read M4A tag")?;
+
+    // Get artwork (first image)
+    if let Some(artwork) = tag.artwork() {
+        tracing::debug!(
+            "Extracting embedded cover from M4A: {} ({} bytes)",
+            file_path.display(),
+            artwork.data.len()
+        );
+
+        std::fs::write(output_path, &artwork.data)
+            .context("Failed to write extracted cover")?;
+
+        Ok(true)
+    } else {
+        tracing::debug!("No embedded cover found in M4A: {}", file_path.display());
+        Ok(false)
+    }
+}
+
+/// Extract embedded cover art from any audio file (auto-detect format)
+pub fn extract_embedded_cover(file_path: &Path, output_path: &Path) -> Result<bool> {
+    let extension = file_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("");
+
+    match extension.to_lowercase().as_str() {
+        "mp3" => extract_mp3_cover_art(file_path, output_path),
+        "m4a" | "m4b" => extract_m4a_cover_art(file_path, output_path),
+        _ => {
+            tracing::debug!("Unsupported format for cover extraction: {}", extension);
+            Ok(false)
+        }
+    }
+}
+
 /// Inject metadata into M4B file using AtomicParsley
 pub async fn inject_metadata_atomicparsley(
     file_path: &Path,

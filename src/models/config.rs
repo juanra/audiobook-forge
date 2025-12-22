@@ -208,6 +208,9 @@ pub struct MetadataConfig {
     /// Cover art filenames to search for
     #[serde(default = "default_cover_filenames")]
     pub cover_filenames: Vec<String>,
+    /// Auto-extract embedded cover art from audio files as fallback
+    #[serde(default = "default_auto_extract_cover")]
+    pub auto_extract_cover: bool,
     /// Audible metadata integration
     #[serde(default)]
     pub audible: AudibleConfig,
@@ -226,6 +229,7 @@ impl Default for MetadataConfig {
                 "cover.png".to_string(),
                 "folder.png".to_string(),
             ],
+            auto_extract_cover: true,
             audible: AudibleConfig::default(),
             match_mode: MatchMode::default(),
         }
@@ -243,6 +247,10 @@ fn default_cover_filenames() -> Vec<String> {
         "cover.png".to_string(),
         "folder.png".to_string(),
     ]
+}
+
+fn default_auto_extract_cover() -> bool {
+    true
 }
 
 /// Matching mode for interactive metadata matching during build

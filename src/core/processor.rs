@@ -281,6 +281,17 @@ impl Processor {
 
         tracing::info!("✓ Metadata injection complete");
 
+        // Clean up extracted cover file if it was auto-extracted
+        if let Some(cover_path) = &book_folder.cover_file {
+            if cover_path.file_name().and_then(|n| n.to_str()) == Some(".extracted_cover.jpg") {
+                if let Err(e) = std::fs::remove_file(cover_path) {
+                    tracing::debug!("Failed to remove extracted cover file: {}", e);
+                } else {
+                    tracing::debug!("Cleaned up extracted cover file");
+                }
+            }
+        }
+
         // Clean up temp directory
         if !self.keep_temp {
             if let Err(e) = std::fs::remove_dir_all(&temp_dir) {

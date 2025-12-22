@@ -7,6 +7,59 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2025-12-21
+
+### 🎉 New Features
+
+#### Auto-Extract Embedded Cover Art (Issue #5)
+- **Automatically extract cover art from MP3/M4A files** - No more manual cover.jpg required!
+  - Fallback behavior: Uses standalone cover files first (cover.jpg, folder.jpg, etc.)
+  - If no standalone cover found, extracts from first audio file's embedded artwork
+  - Supports both MP3 (ID3 APIC frames) and M4A metadata
+  - Configurable via `auto_extract_cover: true/false` in config (defaults to enabled)
+  - Automatically cleans up extracted files after processing
+  - Requested in GitHub Issue #5 by Freyjas-Hair
+
+**Example Usage:**
+```bash
+# Audiobook with embedded cover in MP3s (no cover.jpg)
+audiobook-forge build --root "My Book"
+→ Extracted embedded cover from: chapter01.mp3
+✓ Final M4B includes cover art
+
+# Disable if you only want standalone covers
+# In ~/.audiobook-forge/config.yaml:
+metadata:
+  auto_extract_cover: false
+```
+
+**Benefits:**
+- Audiobooks from Audible/iTunes with embedded covers "just work"
+- No need to manually extract and save cover.jpg
+- Better default experience for users
+- Power users can still override with standalone cover files
+- Fully backward compatible
+
+### 📝 Technical Details
+
+**Files Modified:**
+- `src/models/config.rs` - Added `auto_extract_cover: bool` to MetadataConfig
+- `src/audio/metadata.rs` - Added 3 cover extraction functions (MP3, M4A, auto-detect)
+- `src/audio/mod.rs` - Exported `extract_embedded_cover` function
+- `src/core/scanner.rs` - Added extraction logic in scan_folder(), updated Scanner struct
+- `src/cli/handlers.rs` - Updated Scanner initialization to use config (2 locations)
+- `src/core/processor.rs` - Added cleanup of extracted cover files after processing
+
+**Implementation Details:**
+- Scanner phase extraction (cleaner separation of concerns)
+- Priority: standalone covers first, embedded fallback
+- Extracts to `.extracted_cover.jpg` in book folder during scan
+- Processor cleans up after AtomicParsley embeds it into M4B
+- Uses existing `id3` and `mp4ameta` dependencies
+
+**Issue References:**
+- Implements #5: Automatically use embedded cover from MP3 files
+
 ## [2.7.0] - 2025-12-21
 
 ### 🐛 Fixed

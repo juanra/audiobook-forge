@@ -1,6 +1,6 @@
 //! Directory scanner for discovering audiobook folders
 
-use crate::models::{BookFolder, BookCase};
+use crate::models::{BookFolder, BookCase, Config};
 use anyhow::{Context, Result};
 use std::path::Path;
 use walkdir::WalkDir;
@@ -9,6 +9,8 @@ use walkdir::WalkDir;
 pub struct Scanner {
     /// Cover art filenames to search for
     cover_filenames: Vec<String>,
+    /// Auto-extract embedded cover art
+    auto_extract_cover: bool,
 }
 
 impl Scanner {
@@ -21,12 +23,24 @@ impl Scanner {
                 "cover.png".to_string(),
                 "folder.png".to_string(),
             ],
+            auto_extract_cover: true,
         }
     }
 
     /// Create scanner with custom cover filenames
     pub fn with_cover_filenames(cover_filenames: Vec<String>) -> Self {
-        Self { cover_filenames }
+        Self {
+            cover_filenames,
+            auto_extract_cover: true,
+        }
+    }
+
+    /// Create scanner from config
+    pub fn from_config(config: &Config) -> Self {
+        Self {
+            cover_filenames: config.metadata.cover_filenames.clone(),
+            auto_extract_cover: config.metadata.auto_extract_cover,
+        }
     }
 
     /// Scan a directory for audiobook folders
@@ -135,6 +149,37 @@ impl Scanner {
         if matches!(book.case, BookCase::A | BookCase::B | BookCase::C) {
             // Sort MP3 files naturally
             crate::utils::natural_sort(&mut book.mp3_files);
+
+            // Auto-extract embedded cover art if enabled and no standalone cover found
+            if self.auto_extract_cover
+                && book.cover_file.is_none()
+                && !book.mp3_files.is_empty()
+            {
+                // Try extracting from first audio file (mp3_files includes both MP3 and M4A)
+                let first_audio = book.mp3_files.first();
+
+                if let Some(audio_file) = first_audio {
+                    // Create temp file for extracted cover
+                    let extracted_cover = path.join(".extracted_cover.jpg");
+
+                    match crate::audio::extract_embedded_cover(audio_file, &extracted_cover) {
+                        Ok(true) => {
+                            tracing::info!(
+                                "Extracted embedded cover from: {}",
+                                audio_file.file_name().unwrap_or_default().to_string_lossy()
+                            );
+                            book.cover_file = Some(extracted_cover);
+                        }
+                        Ok(false) => {
+                            tracing::debug!("No embedded cover found in first audio file");
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to extract embedded cover: {}", e);
+                        }
+                    }
+                }
+            }
+
             Ok(Some(book))
         } else {
             Ok(None)

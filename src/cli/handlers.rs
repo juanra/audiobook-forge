@@ -158,7 +158,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     }
 
     // Scan for audiobooks
-    let scanner = Scanner::new();
+    let scanner = Scanner::from_config(&config);
     let mut book_folders = if auto_detected {
         // Auto-detect mode: treat current dir as single book
         vec![scanner.scan_single_directory(&root)?]
@@ -455,7 +455,7 @@ pub fn handle_organize(args: OrganizeArgs, config: Config) -> Result<()> {
     );
 
     // Scan for audiobooks
-    let scanner = Scanner::new();
+    let scanner = Scanner::from_config(&config);
     let book_folders = scanner
         .scan_directory(&root)
         .context("Failed to scan directory")?;
