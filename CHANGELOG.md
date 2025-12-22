@@ -7,6 +7,55 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] - 2025-12-21
+
+### 📚 Documentation Reorganization
+
+#### Complete Documentation Overhaul
+- **Reorganized /docs to single-level structure** - Simplified from 17 files (7,600 lines) to 6 user-focused guides
+  - **NEW: [docs/installation.md](docs/installation.md)** - Complete installation guide with platform-specific instructions
+  - **NEW: [docs/configuration.md](docs/configuration.md)** - Comprehensive configuration reference (~300 lines)
+  - **NEW: [docs/usage.md](docs/usage.md)** - All commands with detailed examples (~400 lines)
+  - **NEW: [docs/metadata.md](docs/metadata.md)** - Complete metadata guide covering ALL features (~450 lines):
+    - Local metadata extraction (ID3, M4A, CUE sheets)
+    - Cover art management and auto-extraction (v2.8.0)
+    - Audible integration (comprehensive guide from former AUDIBLE_METADATA.md)
+    - Interactive matching with fuzzy search
+    - Configuration reference and troubleshooting
+  - **NEW: [docs/troubleshooting.md](docs/troubleshooting.md)** - Common issues and solutions (~350 lines)
+  - **UPDATED: [docs/README.md](docs/README.md)** - Rewritten as simple navigation index
+
+- **Streamlined README.md** - Reduced from 1,225 to 374 lines (70% reduction)
+  - Kept: Project overview, features, quick start, performance benchmarks
+  - Moved to /docs: Detailed configuration, troubleshooting, usage examples
+  - Added clear "Documentation" section linking to all guides
+
+- **Removed obsolete documentation**:
+  - Removed `AUDIBLE_METADATA.md` from root (content moved to docs/metadata.md)
+  - Removed `docs/development/` directory (6 phase files, 3,048 lines - git history is sufficient)
+  - Removed `docs/guides/` directory (stub content only)
+  - Removed `docs/specs/` directory (template only)
+
+#### Added MIT LICENSE File
+- **NEW: LICENSE** - Added official MIT License to project root
+  - Copyright (c) 2025 Audiobook Forge Contributors
+  - Previously referenced in Cargo.toml but file was missing
+
+### 📝 Benefits
+
+**For Users:**
+- Clear, single-level documentation structure (no subdirectories)
+- Topic-based organization (installation, configuration, usage, metadata, troubleshooting)
+- Comprehensive metadata guide covering ALL features (not just Audible)
+- Easy navigation with docs/README.md index
+- Streamlined main README for quick overview
+
+**For Maintainers:**
+- 70% fewer documentation files (17 → 6 in /docs)
+- User-focused content (removed developer phase docs)
+- Easier to update specific topics
+- No duplicate content across multiple READMEs
+
 ## [2.8.0] - 2025-12-21
 
 ### 🎉 New Features
