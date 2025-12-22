@@ -10,6 +10,7 @@ A blazing-fast CLI tool for converting audiobook directories to M4B format with 
 
 - [Why Audiobook Forge?](#-why-audiobook-forge)
 - [Features](#-features)
+- [Support This Project](#-support-this-project)
 - [Installation](#-installation)
 - [Dependencies](#-dependencies)
 - [Usage](#-usage)
@@ -99,6 +100,22 @@ When downloading audiobooks, they often come as **multiple separate MP3 files** 
 - **📊 Progress Tracking**: Real-time progress with ETA calculation
 - **🗂️ Auto-Organization**: Organize books into M4B and To_Convert folders
 - **⚙️ Configuration**: Comprehensive YAML-based configuration with CLI overrides
+
+---
+
+## 💖 Support This Project
+
+If you find **audiobook-forge** useful, please consider supporting its development!
+
+[![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/juanra)
+
+Your sponsorship helps:
+- 🚀 **Active Development**: Keep the project maintained and add new features
+- 🐛 **Bug Fixes**: Respond quickly to issues and edge cases
+- 📚 **Documentation**: Maintain comprehensive guides and examples
+- 🆓 **Free & Open Source**: Keep audiobook-forge free for everyone
+
+Every contribution, no matter the size, is deeply appreciated and helps sustain this project! 🙏
 
 ---
 
@@ -1194,22 +1211,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - [FFmpeg](https://ffmpeg.org/) - Audio/video processing
 - [AtomicParsley](https://github.com/wez/atomicparsley) - Metadata embedding
 - [MP4Box/GPAC](https://github.com/gpac/gpac) - MP4 container tools
-
----
-
-## 💖 Support This Project
-
-If you find **audiobook-forge** useful, please consider supporting its development!
-
-[![Sponsor](https://img.shields.io/badge/Sponsor-❤-ea4aaa?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/juanra)
-
-Your sponsorship helps:
-- 🚀 **Active Development**: Keep the project maintained and add new features
-- 🐛 **Bug Fixes**: Respond quickly to issues and edge cases
-- 📚 **Documentation**: Maintain comprehensive guides and examples
-- 🆓 **Free & Open Source**: Keep audiobook-forge free for everyone
-
-Every contribution, no matter the size, is deeply appreciated and helps sustain this project! 🙏
 
 ---
 
