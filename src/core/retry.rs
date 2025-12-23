@@ -54,7 +54,7 @@ impl RetryConfig {
     }
 
     /// Calculate delay for retry attempt
-    fn calculate_delay(&self, attempt: usize) -> Duration {
+    pub fn calculate_delay(&self, attempt: usize) -> Duration {
         if attempt == 0 {
             return self.initial_delay;
         }
@@ -129,6 +129,28 @@ pub enum ErrorType {
 /// Classify an error to determine if retry is worthwhile
 pub fn classify_error(error: &anyhow::Error) -> ErrorType {
     let error_msg = error.to_string().to_lowercase();
+
+    // HTTP-specific errors
+    // 429 rate limit is transient
+    if error_msg.contains("429") || error_msg.contains("rate limit") {
+        return ErrorType::Transient;
+    }
+
+    // 5xx server errors are transient
+    if error_msg.contains("500") || error_msg.contains("502")
+        || error_msg.contains("503") || error_msg.contains("504")
+        || error_msg.contains("server error")
+    {
+        return ErrorType::Transient;
+    }
+
+    // 4xx client errors are permanent (except 429 handled above)
+    if error_msg.contains("400") || error_msg.contains("401")
+        || error_msg.contains("403") || error_msg.contains("404")
+        || error_msg.contains("client error")
+    {
+        return ErrorType::Permanent;
+    }
 
     // Transient errors (worth retrying)
     if error_msg.contains("timeout")

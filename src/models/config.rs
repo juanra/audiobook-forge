@@ -292,6 +292,15 @@ pub struct AudibleConfig {
     /// Rate limit (requests per minute)
     #[serde(default = "default_rate_limit")]
     pub rate_limit_per_minute: u32,
+    /// Maximum retry attempts for API failures (0 = no retry)
+    #[serde(default = "default_api_max_retries")]
+    pub api_max_retries: u8,
+    /// Initial retry delay in seconds
+    #[serde(default = "default_api_retry_delay")]
+    pub api_retry_delay_secs: u64,
+    /// Maximum retry delay in seconds (for exponential backoff)
+    #[serde(default = "default_api_max_retry_delay")]
+    pub api_max_retry_delay_secs: u64,
 }
 
 impl Default for AudibleConfig {
@@ -303,6 +312,9 @@ impl Default for AudibleConfig {
             download_covers: true,
             cache_duration_hours: 168, // 7 days
             rate_limit_per_minute: 100,
+            api_max_retries: 3,
+            api_retry_delay_secs: 1,
+            api_max_retry_delay_secs: 30,
         }
     }
 }
@@ -317,6 +329,18 @@ fn default_cache_duration() -> u64 {
 
 fn default_rate_limit() -> u32 {
     100
+}
+
+fn default_api_max_retries() -> u8 {
+    3
+}
+
+fn default_api_retry_delay() -> u64 {
+    1
+}
+
+fn default_api_max_retry_delay() -> u64 {
+    30
 }
 
 /// Organization configuration

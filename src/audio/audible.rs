@@ -7,17 +7,82 @@ use serde::Deserialize;
 use std::num::NonZeroU32;
 use std::path::Path;
 use std::time::Duration;
+use thiserror::Error;
 
 use crate::models::{AudibleMetadata, AudibleRegion, AudibleAuthor, AudibleSeries};
 
 const AUDNEXUS_BASE_URL: &str = "https://api.audnex.us";
 const DEFAULT_TIMEOUT_SECS: u64 = 10;
 
+/// Audible API errors with detailed context
+#[derive(Error, Debug)]
+pub enum AudibleApiError {
+    #[error("HTTP {status}: {message}\nURL: {url}\nResponse: {body}")]
+    HttpError {
+        status: u16,
+        message: String,
+        url: String,
+        body: String,
+    },
+
+    #[error("Rate limit exceeded (429). Retry after {retry_after:?}")]
+    RateLimitExceeded {
+        retry_after: Option<Duration>,
+    },
+
+    #[error("Request failed: {0}")]
+    RequestFailed(#[from] reqwest::Error),
+
+    #[error("Invalid response format: {0}")]
+    ParseError(String),
+}
+
+/// Extract detailed error information from HTTP response
+async fn extract_error_details(
+    url: &str,
+    response: reqwest::Response,
+) -> AudibleApiError {
+    let status = response.status().as_u16();
+
+    // Check for 429 rate limit
+    if status == 429 {
+        let retry_after = response
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(Duration::from_secs);
+
+        return AudibleApiError::RateLimitExceeded { retry_after };
+    }
+
+    // Capture response body for debugging
+    let body = response.text().await.unwrap_or_else(|_|
+        "<failed to read response body>".to_string()
+    );
+
+    let message = if (400..500).contains(&status) {
+        "Client error"
+    } else if (500..600).contains(&status) {
+        "Server error"
+    } else {
+        "Unknown error"
+    };
+
+    AudibleApiError::HttpError {
+        status,
+        message: message.to_string(),
+        url: url.to_string(),
+        body: body.chars().take(500).collect(), // Limit to 500 chars
+    }
+}
+
 /// Audible API client with rate limiting
 pub struct AudibleClient {
     client: Client,
     rate_limiter: RateLimiter<DirectNotKeyed, InMemoryState, DefaultClock>,
     region: AudibleRegion,
+    retry_config: crate::core::RetryConfig,
 }
 
 impl AudibleClient {
@@ -28,6 +93,15 @@ impl AudibleClient {
 
     /// Create a new Audible client with custom rate limit
     pub fn with_rate_limit(region: AudibleRegion, requests_per_minute: u32) -> Result<Self> {
+        Self::with_config(region, requests_per_minute, crate::core::RetryConfig::default())
+    }
+
+    /// Create a new Audible client with full configuration
+    pub fn with_config(
+        region: AudibleRegion,
+        requests_per_minute: u32,
+        retry_config: crate::core::RetryConfig,
+    ) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
             .user_agent("audiobook-forge")
@@ -45,26 +119,122 @@ impl AudibleClient {
             client,
             rate_limiter,
             region,
+            retry_config,
         })
+    }
+
+    /// Execute HTTP request with retry logic
+    async fn execute_with_retry<F, Fut>(&self, f: F) -> Result<reqwest::Response>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>,
+    {
+        use crate::core::ErrorType;
+
+        let mut last_error = None;
+
+        for attempt in 0..=self.retry_config.max_retries {
+            // Wait for rate limiter before each attempt
+            self.rate_limiter.until_ready().await;
+
+            match f().await {
+                Ok(response) => {
+                    if attempt > 0 {
+                        tracing::info!("API request succeeded after {} retry attempt(s)", attempt);
+                    }
+                    return Ok(response);
+                }
+                Err(e) => {
+                    last_error = Some(anyhow::Error::from(e));
+
+                    // Check if we should retry
+                    let should_retry = if let Some(ref err) = last_error {
+                        crate::core::classify_error(err) == ErrorType::Transient
+                    } else {
+                        false
+                    };
+
+                    if !should_retry || attempt >= self.retry_config.max_retries {
+                        break;
+                    }
+
+                    let delay = self.retry_config.calculate_delay(attempt);
+                    tracing::warn!(
+                        "API request failed (attempt {}), retrying in {:?}...",
+                        attempt + 1,
+                        delay
+                    );
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        }
+
+        Err(last_error.unwrap())
+    }
+
+    /// Handle 429 rate limit with retry-after header
+    async fn handle_rate_limit_response(
+        &self,
+        response: reqwest::Response,
+        url: &str,
+    ) -> Result<reqwest::Response> {
+        let retry_after = response
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(Duration::from_secs)
+            .unwrap_or(Duration::from_secs(5)); // Default to 5 seconds
+
+        tracing::warn!(
+            "Rate limit exceeded (429) for {}. Retrying after {:?}",
+            url,
+            retry_after
+        );
+
+        tokio::time::sleep(retry_after).await;
+
+        // Retry the request
+        self.rate_limiter.until_ready().await;
+        let retry_response = self.client.get(url).send().await?;
+
+        Ok(retry_response)
     }
 
     /// Fetch metadata by ASIN
     pub async fn fetch_by_asin(&self, asin: &str) -> Result<AudibleMetadata> {
-        // Wait for rate limiter
-        self.rate_limiter.until_ready().await;
-
         let url = format!("{}/books/{}?region={}",
             AUDNEXUS_BASE_URL, asin, self.region.tld());
 
         tracing::debug!("Fetching Audible metadata: {}", url);
 
-        let response = self.client.get(&url)
-            .send()
-            .await
-            .context("Failed to fetch from Audnexus API")?;
+        let response = self.execute_with_retry(|| {
+            self.client.get(&url).send()
+        }).await.context("Failed to fetch from Audnexus API")?;
 
+        // Handle 429 specially
+        let response = if response.status() == 429 {
+            self.handle_rate_limit_response(response, &url).await?
+        } else {
+            response
+        };
+
+        // Check for errors with detailed messages
         if !response.status().is_success() {
-            anyhow::bail!("API returned status: {}", response.status());
+            let error = extract_error_details(&url, response).await;
+
+            // Add helpful suggestions based on error type
+            let suggestion = match error {
+                AudibleApiError::HttpError { status, .. } if status >= 500 => {
+                    "\nSuggestion: This is a server error. Try again later or use a different region."
+                }
+                AudibleApiError::HttpError { status, .. } if status == 404 => {
+                    "\nSuggestion: ASIN not found in this region. Try a different region."
+                }
+                _ => ""
+            };
+
+            anyhow::bail!("{}{}", error, suggestion);
         }
 
         // Parse the response
@@ -82,9 +252,6 @@ impl AudibleClient {
         if title.is_none() && author.is_none() {
             anyhow::bail!("Must provide at least title or author for search");
         }
-
-        // Wait for rate limiter
-        self.rate_limiter.until_ready().await;
 
         // Build query parameters for Audible's search API
         let mut query_params = vec![
@@ -105,14 +272,32 @@ impl AudibleClient {
 
         tracing::debug!("Searching Audible: title={:?}, author={:?}", title, author);
 
-        let response = self.client.get(&url)
-            .query(&query_params)
-            .send()
-            .await
-            .context("Failed to search Audible API")?;
+        let response = self.execute_with_retry(|| {
+            self.client.get(&url).query(&query_params).send()
+        }).await.context("Failed to search Audible API")?;
 
+        // Handle 429 specially
+        let response = if response.status() == 429 {
+            self.handle_rate_limit_response(response, &url).await?
+        } else {
+            response
+        };
+
+        // Enhanced error handling
         if !response.status().is_success() {
-            anyhow::bail!("Search API returned status: {}", response.status());
+            let error = extract_error_details(&url, response).await;
+
+            let suggestion = match error {
+                AudibleApiError::HttpError { status, .. } if status >= 500 => {
+                    "\nSuggestion: Audible's API is experiencing issues. Try again later."
+                }
+                AudibleApiError::HttpError { status, .. } if status == 403 => {
+                    "\nSuggestion: Access forbidden. Check if Audible API has blocked this region/IP."
+                }
+                _ => ""
+            };
+
+            anyhow::bail!("{}{}", error, suggestion);
         }
 
         // Parse Audible's search response (just ASINs)

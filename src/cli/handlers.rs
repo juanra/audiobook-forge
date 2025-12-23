@@ -237,9 +237,16 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
             .and_then(|r| AudibleRegion::from_str(r).ok())
             .unwrap_or(AudibleRegion::US);
 
-        let client = AudibleClient::with_rate_limit(
+        let retry_config = crate::core::RetryConfig::with_settings(
+            config.metadata.audible.api_max_retries as usize,
+            std::time::Duration::from_secs(config.metadata.audible.api_retry_delay_secs),
+            std::time::Duration::from_secs(config.metadata.audible.api_max_retry_delay_secs),
+            2.0,
+        );
+        let client = AudibleClient::with_config(
             audible_region,
-            config.metadata.audible.rate_limit_per_minute
+            config.metadata.audible.rate_limit_per_minute,
+            retry_config,
         )?;
         let cache = AudibleCache::with_ttl_hours(config.metadata.audible.cache_duration_hours)?;
 
@@ -866,9 +873,16 @@ pub async fn handle_match(args: MatchArgs, config: Config) -> Result<()> {
 
     // Initialize Audible client and cache
     let region = AudibleRegion::from_str(&args.region)?;
-    let client = AudibleClient::with_rate_limit(
+    let retry_config = crate::core::RetryConfig::with_settings(
+        config.metadata.audible.api_max_retries as usize,
+        std::time::Duration::from_secs(config.metadata.audible.api_retry_delay_secs),
+        std::time::Duration::from_secs(config.metadata.audible.api_max_retry_delay_secs),
+        2.0,
+    );
+    let client = AudibleClient::with_config(
         region,
-        config.metadata.audible.rate_limit_per_minute
+        config.metadata.audible.rate_limit_per_minute,
+        retry_config,
     )?;
     let cache = AudibleCache::with_ttl_hours(
         config.metadata.audible.cache_duration_hours
@@ -1103,7 +1117,17 @@ async fn apply_metadata(
         let temp_cover = std::env::temp_dir().join(format!("{}.jpg", metadata.asin));
 
         if let Some(cover_url) = &metadata.cover_url {
-            let client = AudibleClient::new(AudibleRegion::US)?; // Region doesn't matter for covers
+            let retry_config = crate::core::RetryConfig::with_settings(
+                config.metadata.audible.api_max_retries as usize,
+                std::time::Duration::from_secs(config.metadata.audible.api_retry_delay_secs),
+                std::time::Duration::from_secs(config.metadata.audible.api_max_retry_delay_secs),
+                2.0,
+            );
+            let client = AudibleClient::with_config(
+                AudibleRegion::US, // Region doesn't matter for covers
+                config.metadata.audible.rate_limit_per_minute,
+                retry_config,
+            )?;
             client.download_cover(cover_url, &temp_cover).await?;
             Some(temp_cover)
         } else {

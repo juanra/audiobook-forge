@@ -7,6 +7,74 @@ All notable changes to audiobook-forge (Rust version) will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] - 2025-12-22
+
+### 🔧 Bug Fixes
+
+#### Enhanced Audible API Error Handling (Issue #6)
+- **Improved error messages with detailed context** - API errors now show full details for debugging
+  - Display HTTP status code, request URL, and response body (up to 500 chars)
+  - Add helpful suggestions based on error type (500 → "Try again later", 403 → "Check region/IP", etc.)
+  - Better error messages help diagnose API issues reported by users
+
+- **Automatic retry logic with exponential backoff** - Transient failures now retry automatically
+  - Configurable retry settings in `config.yaml` under `metadata.audible`:
+    - `api_max_retries: 3` (default) - Maximum retry attempts (0 = disabled)
+    - `api_retry_delay_secs: 1` (default) - Initial delay between retries
+    - `api_max_retry_delay_secs: 30` (default) - Maximum delay cap for exponential backoff
+  - Smart error classification: 5xx server errors are retried, 4xx client errors are not
+  - Uses existing `RetryConfig` infrastructure for consistency
+
+- **Special handling for 429 rate limit errors**
+  - Respects `Retry-After` header when present
+  - Falls back to 5-second delay if header missing
+  - Prevents overwhelming API with rapid retries
+
+**Example Error Messages:**
+
+Before:
+```
+Error: Search API returned status: 500
+```
+
+After:
+```
+Error: HTTP 500: Server error
+URL: https://api.audible.com/1.0/catalog/products?title=Test&num_results=10
+Response: {"error": "Internal server error", "requestId": "abc123"}
+
+Suggestion: Audible's API is experiencing issues. Try again later.
+```
+
+**Configuration Example:**
+```yaml
+metadata:
+  audible:
+    enabled: true
+    region: "us"
+    api_max_retries: 3          # NEW: Retry failed requests (default: 3)
+    api_retry_delay_secs: 1     # NEW: Initial delay (default: 1s)
+    api_max_retry_delay_secs: 30 # NEW: Max delay (default: 30s)
+```
+
+### 📝 Technical Details
+
+**Files Modified:**
+- `src/models/config.rs` - Added retry config fields to AudibleConfig (api_max_retries, api_retry_delay_secs, api_max_retry_delay_secs)
+- `src/audio/audible.rs` - Added AudibleApiError enum, retry logic, enhanced error handling in fetch_by_asin() and search()
+- `src/core/retry.rs` - Extended classify_error() to recognize HTTP status codes, made calculate_delay() public
+- `src/cli/handlers.rs` - Updated all AudibleClient initialization to use retry config (5 locations)
+
+**Backward Compatibility:**
+- ✅ All changes are backward compatible
+- Existing `AudibleClient::new()` calls work unchanged
+- Config files without new fields use sensible defaults (3 retries, 1s delay, 30s max)
+- No breaking changes to public API
+
+**Related Issues:**
+- Addresses GitHub Issue #6 - User reported "Audible 500 API error"
+- Enhanced error messages will help diagnose future API issues
+
 ## [2.8.1] - 2025-12-21
 
 ### 📚 Documentation Reorganization
