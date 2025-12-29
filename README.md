@@ -48,6 +48,7 @@ When downloading audiobooks, they often come as **multiple separate MP3 files** 
 - **🚀 Parallel Book Processing**: Convert multiple audiobooks simultaneously
 - **🎯 Smart Quality Detection**: Automatically detects and preserves source audio quality
 - **📖 Chapter Generation**: Multiple sources (files, CUE sheets, auto-detection)
+- **📝 Chapter Updates** (v2.9.0): Replace generic chapter names with meaningful titles from Audnex API, text files, or EPUB
 - **🎨 Metadata Management**: Comprehensive metadata from multiple sources
 - **🖼️ Auto-Extract Cover Art** (v2.8.0): Automatically extracts embedded cover art as fallback
 - **🎭 Interactive Metadata Matching** (v2.3.0+): BEETS-inspired fuzzy matching with confidence scoring
@@ -149,6 +150,41 @@ audiobook-forge match --file "Book.m4b"
 # Batch match entire directory
 audiobook-forge match --dir /path/to/m4b/files
 ```
+
+### Update M4B Chapters (v2.9.0) 🆕
+
+Replace generic chapter names ("Chapter 1", "Chapter 2") with meaningful titles from multiple sources:
+
+```bash
+# Update chapters from Audnex API (Audible chapter data)
+audiobook-forge metadata enrich --file "Book.m4b" \
+  --chapters-asin B08V3XQ7LK
+
+# Update from text file (simple, timestamped, or MP4Box format)
+audiobook-forge metadata enrich --file "Book.m4b" \
+  --chapters chapters.txt \
+  --merge-strategy keep-timestamps
+
+# Update from EPUB table of contents
+audiobook-forge metadata enrich --file "Book.m4b" \
+  --chapters book.epub
+
+# Update chapters only (skip metadata enrichment)
+audiobook-forge metadata enrich --file "Book.m4b" \
+  --chapters chapters.txt \
+  --update-chapters-only
+```
+
+**Supported chapter sources:**
+- **Audnex API**: Fetch official Audible chapter data by ASIN
+- **Text files**: Simple (one per line), timestamped (HH:MM:SS Title), MP4Box format
+- **EPUB files**: Extract from table of contents
+
+**Merge strategies:**
+- `keep-timestamps`: Update names, preserve existing timestamps (default for text/EPUB)
+- `replace-all`: Replace entire chapter list with new data
+- `skip-on-mismatch`: Error if chapter counts don't match
+- `interactive`: Prompt for each file (default)
 
 **📖 Complete usage guide**: See [docs/usage.md](docs/usage.md)
 
