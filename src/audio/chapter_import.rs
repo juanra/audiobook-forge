@@ -270,6 +270,69 @@ pub fn parse_epub_chapters(path: &Path) -> Result<Vec<Chapter>> {
     Ok(toc)
 }
 
+/// Merge new chapters with existing chapters according to strategy
+pub fn merge_chapters(
+    existing: &[Chapter],
+    new: &[Chapter],
+    strategy: ChapterMergeStrategy,
+) -> Result<Vec<Chapter>> {
+    let comparison = ChapterComparison::new(existing, new);
+
+    match strategy {
+        ChapterMergeStrategy::SkipOnMismatch => {
+            if !comparison.matches {
+                anyhow::bail!(
+                    "Chapter count mismatch: existing has {}, new has {}. Skipping update.",
+                    comparison.existing_count,
+                    comparison.new_count
+                );
+            }
+            // If counts match, fall through to KeepTimestamps behavior
+            merge_keep_timestamps(existing, new)
+        }
+
+        ChapterMergeStrategy::KeepTimestamps => {
+            merge_keep_timestamps(existing, new)
+        }
+
+        ChapterMergeStrategy::ReplaceAll => {
+            // Simply return new chapters
+            Ok(new.to_vec())
+        }
+
+        ChapterMergeStrategy::Interactive => {
+            // This will be handled at a higher level (CLI handler)
+            // For now, default to KeepTimestamps
+            merge_keep_timestamps(existing, new)
+        }
+    }
+}
+
+/// Helper: Keep existing timestamps, update names only
+fn merge_keep_timestamps(existing: &[Chapter], new: &[Chapter]) -> Result<Vec<Chapter>> {
+    let min_len = existing.len().min(new.len());
+
+    let mut merged: Vec<Chapter> = existing[..min_len]
+        .iter()
+        .zip(&new[..min_len])
+        .map(|(old, new_ch)| {
+            Chapter::new(
+                old.number,
+                new_ch.title.clone(),
+                old.start_time_ms,
+                old.end_time_ms,
+            )
+        })
+        .collect();
+
+    // If there are extra existing chapters beyond new chapters, keep them
+    if existing.len() > min_len {
+        merged.extend_from_slice(&existing[min_len..]);
+    }
+
+    Ok(merged)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,5 +437,92 @@ mod tests {
         // For now, we expect it to fail (function doesn't exist yet)
         // Once implemented, this will extract chapter titles from EPUB ToC
         assert!(result.is_err() || result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_merge_keep_timestamps() {
+        let existing = vec![
+            Chapter::new(1, "Chapter 1".to_string(), 0, 1000),
+            Chapter::new(2, "Chapter 2".to_string(), 1000, 2000),
+            Chapter::new(3, "Chapter 3".to_string(), 2000, 3000),
+        ];
+
+        let new = vec![
+            Chapter::new(1, "Prologue".to_string(), 0, 0),
+            Chapter::new(2, "The Beginning".to_string(), 0, 0),
+            Chapter::new(3, "The Journey".to_string(), 0, 0),
+        ];
+
+        let merged = merge_chapters(&existing, &new, ChapterMergeStrategy::KeepTimestamps).unwrap();
+
+        assert_eq!(merged.len(), 3);
+        assert_eq!(merged[0].title, "Prologue");
+        assert_eq!(merged[0].start_time_ms, 0);
+        assert_eq!(merged[0].end_time_ms, 1000);
+        assert_eq!(merged[1].title, "The Beginning");
+        assert_eq!(merged[1].start_time_ms, 1000);
+        assert_eq!(merged[2].title, "The Journey");
+        assert_eq!(merged[2].start_time_ms, 2000);
+    }
+
+    #[test]
+    fn test_merge_replace_all() {
+        let existing = vec![
+            Chapter::new(1, "Chapter 1".to_string(), 0, 1000),
+            Chapter::new(2, "Chapter 2".to_string(), 1000, 2000),
+        ];
+
+        let new = vec![
+            Chapter::new(1, "Prologue".to_string(), 0, 500),
+            Chapter::new(2, "The Beginning".to_string(), 500, 1500),
+            Chapter::new(3, "The Journey".to_string(), 1500, 2500),
+        ];
+
+        let merged = merge_chapters(&existing, &new, ChapterMergeStrategy::ReplaceAll).unwrap();
+
+        assert_eq!(merged.len(), 3);
+        assert_eq!(merged[0].title, "Prologue");
+        assert_eq!(merged[0].start_time_ms, 0);
+        assert_eq!(merged[0].end_time_ms, 500);
+        assert_eq!(merged[2].title, "The Journey");
+    }
+
+    #[test]
+    fn test_merge_skip_on_mismatch() {
+        let existing = vec![
+            Chapter::new(1, "Chapter 1".to_string(), 0, 1000),
+            Chapter::new(2, "Chapter 2".to_string(), 1000, 2000),
+        ];
+
+        let new = vec![
+            Chapter::new(1, "Prologue".to_string(), 0, 0),
+        ];
+
+        let result = merge_chapters(&existing, &new, ChapterMergeStrategy::SkipOnMismatch);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Chapter count mismatch"));
+    }
+
+    #[test]
+    fn test_merge_keep_timestamps_with_extra_existing() {
+        let existing = vec![
+            Chapter::new(1, "Chapter 1".to_string(), 0, 1000),
+            Chapter::new(2, "Chapter 2".to_string(), 1000, 2000),
+            Chapter::new(3, "Chapter 3".to_string(), 2000, 3000),
+        ];
+
+        let new = vec![
+            Chapter::new(1, "Prologue".to_string(), 0, 0),
+        ];
+
+        let merged = merge_chapters(&existing, &new, ChapterMergeStrategy::KeepTimestamps).unwrap();
+
+        // Should merge first chapter and keep the remaining existing ones
+        assert_eq!(merged.len(), 3);
+        assert_eq!(merged[0].title, "Prologue");
+        assert_eq!(merged[1].title, "Chapter 2");
+        assert_eq!(merged[2].title, "Chapter 3");
     }
 }
