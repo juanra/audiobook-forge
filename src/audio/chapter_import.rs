@@ -270,6 +270,82 @@ pub fn parse_epub_chapters(path: &Path) -> Result<Vec<Chapter>> {
     Ok(toc)
 }
 
+/// Read existing chapters from M4B file using ffprobe
+pub async fn read_m4b_chapters(m4b_path: &Path) -> Result<Vec<Chapter>> {
+    use serde::Deserialize;
+    use tokio::process::Command;
+
+    #[derive(Debug, Deserialize)]
+    struct FfprobeChapter {
+        id: i64,
+        #[serde(default)]
+        start_time: String,
+        #[serde(default)]
+        end_time: String,
+        tags: Option<FfprobeTags>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FfprobeTags {
+        title: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FfprobeOutput {
+        chapters: Vec<FfprobeChapter>,
+    }
+
+    let output = Command::new("ffprobe")
+        .args([
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_chapters",
+        ])
+        .arg(m4b_path)
+        .output()
+        .await
+        .context("Failed to execute ffprobe")?;
+
+    if !output.status.success() {
+        anyhow::bail!("ffprobe failed to read chapters from M4B file");
+    }
+
+    let json_str = String::from_utf8(output.stdout)
+        .context("ffprobe output is not valid UTF-8")?;
+
+    let ffprobe_output: FfprobeOutput = serde_json::from_str(&json_str)
+        .context("Failed to parse ffprobe JSON output")?;
+
+    let chapters: Vec<Chapter> = ffprobe_output
+        .chapters
+        .into_iter()
+        .enumerate()
+        .map(|(i, ch)| {
+            let title = ch
+                .tags
+                .and_then(|t| t.title)
+                .unwrap_or_else(|| format!("Chapter {}", i + 1));
+
+            let start_ms = parse_ffprobe_time(&ch.start_time).unwrap_or(0);
+            let end_ms = parse_ffprobe_time(&ch.end_time).unwrap_or(0);
+
+            Chapter::new((i + 1) as u32, title, start_ms, end_ms)
+        })
+        .collect();
+
+    if chapters.is_empty() {
+        tracing::warn!("No chapters found in M4B file");
+    }
+
+    Ok(chapters)
+}
+
+/// Parse ffprobe timestamp string (seconds.microseconds) to milliseconds
+fn parse_ffprobe_time(time_str: &str) -> Option<u64> {
+    let seconds: f64 = time_str.parse().ok()?;
+    Some((seconds * 1000.0) as u64)
+}
+
 /// Merge new chapters with existing chapters according to strategy
 pub fn merge_chapters(
     existing: &[Chapter],
@@ -524,5 +600,15 @@ mod tests {
         assert_eq!(merged[0].title, "Prologue");
         assert_eq!(merged[1].title, "Chapter 2");
         assert_eq!(merged[2].title, "Chapter 3");
+    }
+
+    #[test]
+    fn test_parse_ffprobe_time() {
+        assert_eq!(parse_ffprobe_time("0.000000"), Some(0));
+        assert_eq!(parse_ffprobe_time("5.5"), Some(5500));
+        assert_eq!(parse_ffprobe_time("330.500"), Some(330_500));
+        assert_eq!(parse_ffprobe_time("3661.250"), Some(3_661_250)); // 1h 1m 1.25s
+        assert_eq!(parse_ffprobe_time("invalid"), None);
+        assert_eq!(parse_ffprobe_time(""), None);
     }
 }
