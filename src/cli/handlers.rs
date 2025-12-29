@@ -783,7 +783,16 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
             Ok(())
         }
 
-        MetadataCommands::Enrich { file, asin, auto_detect, region } => {
+        MetadataCommands::Enrich {
+            file,
+            asin,
+            auto_detect,
+            region,
+            chapters: _chapters,
+            chapters_asin: _chapters_asin,
+            update_chapters_only: _update_chapters_only,
+            merge_strategy: _merge_strategy,
+        } => {
             println!("{} Enriching M4B file with Audible metadata...", style("→").cyan());
 
             if !file.exists() {

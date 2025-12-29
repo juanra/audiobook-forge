@@ -226,6 +226,22 @@ pub enum MetadataCommands {
         /// Audible region
         #[arg(long, default_value = "us")]
         region: String,
+
+        /// Update chapters from file (text/EPUB)
+        #[arg(long)]
+        chapters: Option<PathBuf>,
+
+        /// Fetch chapters from Audnex API by ASIN
+        #[arg(long, conflicts_with = "chapters")]
+        chapters_asin: Option<String>,
+
+        /// Only update chapters, skip metadata enrichment
+        #[arg(long)]
+        update_chapters_only: bool,
+
+        /// Chapter merge strategy (keep-timestamps, replace-all, skip-on-mismatch, interactive)
+        #[arg(long, default_value = "interactive")]
+        merge_strategy: String,
     },
 }
 
