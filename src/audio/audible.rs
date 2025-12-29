@@ -246,6 +246,56 @@ impl AudibleClient {
         Ok(convert_audnexus_to_metadata(api_response))
     }
 
+    /// Fetch chapter data from Audnex API
+    pub async fn fetch_chapters(&self, asin: &str) -> Result<Vec<crate::models::AudibleChapter>> {
+        let url = format!("{}/books/{}/chapters?region={}",
+            AUDNEXUS_BASE_URL, asin, self.region.tld());
+
+        tracing::debug!("Fetching Audible chapters: {}", url);
+
+        let response = self.execute_with_retry(|| {
+            self.client.get(&url).send()
+        }).await.context("Failed to fetch chapters from Audnexus API")?;
+
+        // Handle 429 specially
+        let response = if response.status() == 429 {
+            self.handle_rate_limit_response(response, &url).await?
+        } else {
+            response
+        };
+
+        // Check for errors with detailed messages
+        if !response.status().is_success() {
+            let error = extract_error_details(&url, response).await;
+
+            let suggestion = match error {
+                AudibleApiError::HttpError { status, .. } if status >= 500 => {
+                    "\nSuggestion: This is a server error. Try again later or use a different region."
+                }
+                AudibleApiError::HttpError { status, .. } if status == 404 => {
+                    "\nSuggestion: No chapter data available for this ASIN in this region."
+                }
+                _ => ""
+            };
+
+            anyhow::bail!("{}{}", error, suggestion);
+        }
+
+        // Parse the response
+        let api_response: crate::models::AudnexChaptersResponse = response.json()
+            .await
+            .context("Failed to parse Audible chapters")?;
+
+        tracing::info!(
+            "Fetched {} chapters for ASIN {} (accurate: {})",
+            api_response.chapters.len(),
+            asin,
+            api_response.is_accurate.unwrap_or(false)
+        );
+
+        Ok(api_response.chapters)
+    }
+
     /// Search by title and/or author using Audible's API
     /// Returns full metadata for each result by fetching from Audnexus
     pub async fn search(&self, title: Option<&str>, author: Option<&str>) -> Result<Vec<AudibleMetadata>> {
@@ -588,5 +638,18 @@ mod tests {
 
         client.set_region(AudibleRegion::UK);
         assert_eq!(client.region(), AudibleRegion::UK);
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires network access
+    async fn test_fetch_chapters_integration() {
+        let client = AudibleClient::new(AudibleRegion::US).unwrap();
+
+        // Known ASIN with chapters
+        let chapters = client.fetch_chapters("1774248182").await.unwrap();
+
+        assert!(!chapters.is_empty());
+        assert!(chapters[0].title.len() > 0);
+        assert!(chapters[0].length_ms > 0);
     }
 }
