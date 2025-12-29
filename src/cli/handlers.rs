@@ -788,15 +788,93 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
             asin,
             auto_detect,
             region,
-            chapters: _chapters,
-            chapters_asin: _chapters_asin,
-            update_chapters_only: _update_chapters_only,
-            merge_strategy: _merge_strategy,
+            chapters,
+            chapters_asin,
+            update_chapters_only,
+            merge_strategy,
         } => {
-            println!("{} Enriching M4B file with Audible metadata...", style("→").cyan());
+            use crate::audio::{read_m4b_chapters, parse_text_chapters, parse_epub_chapters, merge_chapters, inject_chapters_mp4box, write_mp4box_chapters, ChapterMergeStrategy};
+            use std::str::FromStr;
+
+            let action = if update_chapters_only {
+                "Updating chapters"
+            } else {
+                "Enriching M4B file with Audible metadata"
+            };
+            println!("{} {}...", style("→").cyan(), action);
 
             if !file.exists() {
                 bail!("File does not exist: {}", file.display());
+            }
+
+            // Parse merge strategy
+            let strategy = match merge_strategy.as_str() {
+                "keep-timestamps" => ChapterMergeStrategy::KeepTimestamps,
+                "replace-all" => ChapterMergeStrategy::ReplaceAll,
+                "skip-on-mismatch" => ChapterMergeStrategy::SkipOnMismatch,
+                "interactive" => ChapterMergeStrategy::Interactive,
+                _ => bail!("Invalid merge strategy: {}. Valid options: keep-timestamps, replace-all, skip-on-mismatch, interactive", merge_strategy),
+            };
+
+            // Handle chapter update if requested
+            let chapter_update_performed = if chapters.is_some() || chapters_asin.is_some() {
+                println!("  {} Reading existing chapters from M4B...", style("→").cyan());
+                let existing_chapters = read_m4b_chapters(&file).await?;
+                println!("  {} Found {} existing chapters", style("✓").green(), existing_chapters.len());
+
+                // Fetch new chapters based on source
+                let new_chapters = if let Some(chapters_file) = chapters {
+                    println!("  {} Parsing chapters from file...", style("→").cyan());
+                    if chapters_file.extension().and_then(|s| s.to_str()) == Some("epub") {
+                        parse_epub_chapters(&chapters_file)?
+                    } else {
+                        parse_text_chapters(&chapters_file)?
+                    }
+                } else if let Some(asin_val) = chapters_asin {
+                    println!("  {} Fetching chapters from Audnex API...", style("→").cyan());
+                    let audible_region = AudibleRegion::from_str(&region).unwrap_or(AudibleRegion::US);
+                    let client = crate::audio::AudibleClient::with_rate_limit(
+                        audible_region,
+                        config.metadata.audible.rate_limit_per_minute
+                    )?;
+                    let audible_chapters = client.fetch_chapters(&asin_val).await?;
+                    audible_chapters.into_iter().enumerate().map(|(i, ch)| ch.to_chapter((i + 1) as u32)).collect()
+                } else {
+                    vec![]
+                };
+
+                println!("  {} Loaded {} new chapters", style("✓").green(), new_chapters.len());
+
+                // Merge chapters
+                println!("  {} Merging chapters (strategy: {})...", style("→").cyan(), merge_strategy);
+                let merged = merge_chapters(&existing_chapters, &new_chapters, strategy)?;
+                println!("  {} Merged into {} chapters", style("✓").green(), merged.len());
+
+                // Write chapters to temp file
+                let temp_chapters = std::env::temp_dir().join(format!("chapters_{}.txt", file.file_stem().unwrap().to_string_lossy()));
+                write_mp4box_chapters(&merged, &temp_chapters)?;
+
+                // Inject chapters back into M4B
+                println!("  {} Injecting chapters into M4B...", style("→").cyan());
+                inject_chapters_mp4box(&file, &temp_chapters).await?;
+                std::fs::remove_file(&temp_chapters)?;
+
+                println!("  {} Chapters updated successfully", style("✓").green());
+                true
+            } else {
+                false
+            };
+
+            // Skip metadata enrichment if only updating chapters
+            if update_chapters_only {
+                if !chapter_update_performed {
+                    bail!("--update-chapters-only specified but no chapter source provided (use --chapters or --chapters-asin)");
+                }
+                println!("\n{} Successfully updated chapters: {}",
+                    style("✓").green(),
+                    style(file.display()).yellow()
+                );
+                return Ok(());
             }
 
             // Detect or use provided ASIN
