@@ -205,6 +205,56 @@ impl AudibleSearchResult {
     }
 }
 
+/// Chapter information from Audnex API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudibleChapter {
+    /// Chapter title
+    pub title: String,
+    /// Duration in milliseconds
+    #[serde(rename = "lengthMs")]
+    pub length_ms: u64,
+    /// Start offset in milliseconds from beginning
+    #[serde(rename = "startOffsetMs")]
+    pub start_offset_ms: u64,
+    /// Start offset in seconds (convenience field)
+    #[serde(rename = "startOffsetSec", default)]
+    pub start_offset_sec: Option<u32>,
+}
+
+impl AudibleChapter {
+    /// Get end time in milliseconds
+    pub fn end_offset_ms(&self) -> u64 {
+        self.start_offset_ms + self.length_ms
+    }
+
+    /// Convert to internal Chapter struct
+    pub fn to_chapter(&self, number: u32) -> crate::audio::Chapter {
+        crate::audio::Chapter::new(
+            number,
+            self.title.clone(),
+            self.start_offset_ms,
+            self.end_offset_ms(),
+        )
+    }
+}
+
+/// Audnex chapters API response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudnexChaptersResponse {
+    pub asin: String,
+    #[serde(rename = "brandIntroDurationMs", default)]
+    pub brand_intro_duration_ms: Option<u64>,
+    #[serde(rename = "brandOutroDurationMs", default)]
+    pub brand_outro_duration_ms: Option<u64>,
+    pub chapters: Vec<AudibleChapter>,
+    #[serde(rename = "isAccurate", default)]
+    pub is_accurate: Option<bool>,
+    #[serde(default)]
+    pub region: Option<String>,
+    #[serde(rename = "runtimeLengthMs", default)]
+    pub runtime_length_ms: Option<u64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,5 +340,34 @@ mod tests {
         assert_eq!(metadata.narrators_string(), "Narrator One, Narrator Two");
         assert_eq!(metadata.primary_author(), Some("Author One"));
         assert_eq!(metadata.primary_narrator(), Some("Narrator One"));
+    }
+
+    #[test]
+    fn test_audible_chapter_end_offset() {
+        let chapter = AudibleChapter {
+            title: "Prologue".to_string(),
+            length_ms: 300_000, // 5 minutes
+            start_offset_ms: 0,
+            start_offset_sec: Some(0),
+        };
+
+        assert_eq!(chapter.end_offset_ms(), 300_000);
+    }
+
+    #[test]
+    fn test_audible_chapter_to_chapter_conversion() {
+        let audible_chapter = AudibleChapter {
+            title: "Chapter 1".to_string(),
+            length_ms: 600_000, // 10 minutes
+            start_offset_ms: 300_000, // starts at 5 min
+            start_offset_sec: Some(300),
+        };
+
+        let chapter = audible_chapter.to_chapter(1);
+
+        assert_eq!(chapter.number, 1);
+        assert_eq!(chapter.title, "Chapter 1");
+        assert_eq!(chapter.start_time_ms, 300_000);
+        assert_eq!(chapter.end_time_ms, 900_000);
     }
 }
