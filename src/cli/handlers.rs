@@ -270,6 +270,18 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                                 let _ = cache.set(&asin, &metadata).await;
                                 book.audible_metadata = Some(metadata);
                                 println!("  {} {} (ASIN: {})", style("✓").green(), book.name, asin);
+
+                                // Fetch chapters if enabled
+                                if config.metadata.audible.fetch_chapters {
+                                    match client.fetch_chapters(&asin).await {
+                                        Ok(chapters) => {
+                                            tracing::debug!("Fetched {} chapters for ASIN: {}", chapters.len(), asin);
+                                        }
+                                        Err(e) => {
+                                            tracing::debug!("No chapters available for ASIN {}: {:?}", asin, e);
+                                        }
+                                    }
+                                }
                             }
                             Err(e) => {
                                 tracing::warn!("Failed to fetch metadata for {}: {:?}", book.name, e);
@@ -302,6 +314,18 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                                         let _ = cache.set(asin, &metadata).await;
                                         book.audible_metadata = Some(metadata);
                                         println!("  {} {} (matched: {})", style("✓").green(), book.name, asin);
+
+                                        // Fetch chapters if enabled
+                                        if config.metadata.audible.fetch_chapters {
+                                            match client.fetch_chapters(asin).await {
+                                                Ok(chapters) => {
+                                                    tracing::debug!("Fetched {} chapters for ASIN: {}", chapters.len(), asin);
+                                                }
+                                                Err(e) => {
+                                                    tracing::debug!("No chapters available for ASIN {}: {:?}", asin, e);
+                                                }
+                                            }
+                                        }
                                     }
                                     Err(e) => {
                                         tracing::warn!("Failed to fetch metadata after match for {}: {:?}", book.name, e);

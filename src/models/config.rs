@@ -286,6 +286,9 @@ pub struct AudibleConfig {
     /// Download and embed cover art from Audible
     #[serde(default = "default_true")]
     pub download_covers: bool,
+    /// Fetch chapter data from Audnex API during build
+    #[serde(default)]
+    pub fetch_chapters: bool,
     /// Cache metadata locally (hours, 0 = no cache)
     #[serde(default = "default_cache_duration")]
     pub cache_duration_hours: u64,
@@ -310,6 +313,7 @@ impl Default for AudibleConfig {
             region: "us".to_string(),
             auto_match: false,
             download_covers: true,
+            fetch_chapters: false,
             cache_duration_hours: 168, // 7 days
             rate_limit_per_minute: 100,
             api_max_retries: 3,
