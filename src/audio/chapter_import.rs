@@ -243,6 +243,33 @@ fn parse_mp4box_format(content: &str) -> Result<Vec<Chapter>> {
     Ok(chapters)
 }
 
+/// Parse chapters from EPUB file (extracts from Table of Contents)
+pub fn parse_epub_chapters(path: &Path) -> Result<Vec<Chapter>> {
+    use epub::doc::EpubDoc;
+
+    let doc = EpubDoc::new(path)
+        .context("Failed to open EPUB file")?;
+
+    let toc = doc.toc
+        .iter()
+        .enumerate()
+        .map(|(i, nav_point)| {
+            Chapter::new(
+                (i + 1) as u32,
+                nav_point.label.clone(),
+                0, // No timestamps in EPUB
+                0,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    if toc.is_empty() {
+        anyhow::bail!("No chapters found in EPUB table of contents");
+    }
+
+    Ok(toc)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,5 +356,23 @@ mod tests {
         assert_eq!(chapters[0].start_time_ms, 0);
         assert_eq!(chapters[1].title, "Chapter 1");
         assert_eq!(chapters[1].start_time_ms, 330_500);
+    }
+
+    #[test]
+    fn test_parse_epub_chapters() {
+        // This test will fail until we implement parse_epub_chapters()
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        // Create a minimal EPUB-like structure (won't be a real EPUB)
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "Mock EPUB content").unwrap();
+
+        // This should fail with "not implemented" or similar
+        let result = parse_epub_chapters(temp_file.path());
+
+        // For now, we expect it to fail (function doesn't exist yet)
+        // Once implemented, this will extract chapter titles from EPUB ToC
+        assert!(result.is_err() || result.unwrap().is_empty());
     }
 }

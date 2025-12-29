@@ -19,4 +19,4 @@ pub use metadata::{extract_metadata, extract_mp3_metadata, extract_m4a_metadata,
 pub use chapters::{Chapter, generate_chapters_from_files, parse_cue_file, write_mp4box_chapters, inject_chapters_mp4box};
 pub use audible::{AudibleClient, detect_asin, clean_sequence};
 pub use encoder::{AacEncoder, get_encoder, EncoderDetector};
-pub use chapter_import::{ChapterSource, ChapterMergeStrategy, ChapterComparison};
+pub use chapter_import::{ChapterSource, ChapterMergeStrategy, ChapterComparison, parse_text_chapters, parse_epub_chapters};
