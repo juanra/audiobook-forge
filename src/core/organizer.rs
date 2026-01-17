@@ -87,8 +87,8 @@ impl Organizer {
 
         // Determine target folder based on book case
         let (target_folder_name, action) = match book.case {
-            BookCase::A | BookCase::B => {
-                // Needs conversion
+            BookCase::A | BookCase::B | BookCase::E => {
+                // Needs conversion (E = multiple M4B files to merge)
                 (&self.convert_folder, OrganizeAction::MovedToConvert)
             }
             BookCase::C => {
@@ -232,7 +232,7 @@ impl Organizer {
     /// Get target folder path for a book case
     pub fn get_target_folder(&self, case: BookCase) -> Option<PathBuf> {
         match case {
-            BookCase::A | BookCase::B => Some(self.root.join(&self.convert_folder)),
+            BookCase::A | BookCase::B | BookCase::E => Some(self.root.join(&self.convert_folder)),
             BookCase::C => Some(self.root.join(&self.m4b_folder)),
             BookCase::D => None,
         }

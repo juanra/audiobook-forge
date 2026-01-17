@@ -15,6 +15,8 @@ pub enum BookCase {
     C,
     /// Case D: Unknown or invalid folder structure
     D,
+    /// Case E: Multiple M4B files that can be merged losslessly
+    E,
 }
 
 impl BookCase {
@@ -25,6 +27,7 @@ impl BookCase {
             BookCase::B => "B",
             BookCase::C => "C",
             BookCase::D => "D",
+            BookCase::E => "E",
         }
     }
 }
@@ -58,6 +61,8 @@ pub struct BookFolder {
     pub audible_metadata: Option<AudibleMetadata>,
     /// Detected ASIN from folder name or metadata
     pub detected_asin: Option<String>,
+    /// Whether a merge pattern was detected for multiple M4B files
+    pub merge_pattern_detected: bool,
 }
 
 impl BookFolder {
@@ -80,15 +85,29 @@ impl BookFolder {
             cue_file: None,
             audible_metadata: None,
             detected_asin: None,
+            merge_pattern_detected: false,
         }
     }
 
     /// Classify the folder based on its contents
     pub fn classify(&mut self) {
+        use crate::utils::detect_merge_pattern;
+
         let mp3_count = self.mp3_files.len();
         let m4b_count = self.m4b_files.len();
 
-        self.case = if m4b_count > 0 {
+        self.case = if m4b_count > 1 {
+            // Check if multiple M4B files match a merge pattern
+            let paths: Vec<&std::path::Path> = self.m4b_files.iter().map(|p| p.as_path()).collect();
+            let pattern_result = detect_merge_pattern(&paths);
+            self.merge_pattern_detected = pattern_result.pattern_detected;
+
+            if pattern_result.pattern_detected {
+                BookCase::E
+            } else {
+                BookCase::C
+            }
+        } else if m4b_count == 1 {
             BookCase::C
         } else if mp3_count > 1 {
             BookCase::A
@@ -157,9 +176,9 @@ impl BookFolder {
         }
     }
 
-    /// Check if folder is processable (Case A or B)
+    /// Check if folder is processable (Case A, B, or E)
     pub fn is_processable(&self) -> bool {
-        matches!(self.case, BookCase::A | BookCase::B)
+        matches!(self.case, BookCase::A | BookCase::B | BookCase::E)
     }
 
     /// Get album artist from tracks (first non-None value)
@@ -198,6 +217,7 @@ mod tests {
         assert_eq!(BookCase::B.to_string(), "Case B");
         assert_eq!(BookCase::C.to_string(), "Case C");
         assert_eq!(BookCase::D.to_string(), "Case D");
+        assert_eq!(BookCase::E.to_string(), "Case E");
     }
 
     #[test]
@@ -205,6 +225,7 @@ mod tests {
         let book = BookFolder::new(PathBuf::from("/path/to/My Book"));
         assert_eq!(book.name, "My Book");
         assert_eq!(book.case, BookCase::D);
+        assert!(!book.merge_pattern_detected);
     }
 
     #[test]
@@ -234,6 +255,24 @@ mod tests {
         book.m4b_files.clear();
         book.classify();
         assert_eq!(book.case, BookCase::D);
+
+        // Case E: multiple M4B files with merge pattern
+        book.m4b_files = vec![
+            PathBuf::from("Book Part 1.m4b"),
+            PathBuf::from("Book Part 2.m4b"),
+        ];
+        book.classify();
+        assert_eq!(book.case, BookCase::E);
+        assert!(book.merge_pattern_detected);
+
+        // Case C: multiple M4B files without merge pattern
+        book.m4b_files = vec![
+            PathBuf::from("Completely Different.m4b"),
+            PathBuf::from("Another Book.m4b"),
+        ];
+        book.classify();
+        assert_eq!(book.case, BookCase::C);
+        assert!(!book.merge_pattern_detected);
     }
 
     #[test]
