@@ -55,6 +55,7 @@ When downloading audiobooks, they often come as **multiple separate MP3 files** 
 - **🎧 Audible Integration** (v2.2.0): Fetch comprehensive metadata from Audible's catalog
 - **🔄 Batch Operations**: Process entire libraries with a single command
 - **⚡ Copy Mode**: Ultra-fast concatenation without re-encoding when possible
+- **🔗 M4B Merge** (v2.10.0): Combine multiple M4B files into one without re-encoding
 - **🔁 Error Recovery**: Automatic retry with configurable settings
 - **📊 Progress Tracking**: Real-time progress with ETA calculation
 - **⚙️ Configuration**: Comprehensive YAML-based configuration with CLI overrides
@@ -187,6 +188,29 @@ audiobook-forge metadata enrich --file "Book.m4b" \
 - `interactive`: Prompt for each file (default)
 
 **📖 Complete usage guide**: See [docs/usage.md](docs/usage.md)
+
+### M4B Merge (v2.10.0) 🆕
+
+Combine multiple M4B files into a single file **without re-encoding**:
+
+```bash
+# Auto-detect sequential parts (Part 1, Part 2, Disc 1, etc.)
+audiobook-forge build --root /path/to/book
+
+# Force merge even without detected pattern
+audiobook-forge build --root /path/to/book --merge-m4b
+```
+
+**Supported naming patterns:**
+- **Part patterns**: `Part 1`, `Part 2`, `Pt 1`, `Pt. 1`
+- **Disc patterns**: `Disc 1`, `Disc1`, `CD1`, `CD 1`, `Disk 1`
+- **Numeric suffix**: `Book 01.m4b`, `Book 02.m4b`
+
+**Features:**
+- ⚡ **Lossless audio concatenation** - No re-encoding, preserves original quality
+- 📖 **Chapter preservation** - All chapters merged with adjusted timestamps
+- 📝 **Metadata copying** - Metadata from first source file is preserved
+- 🔍 **Smart detection** - Automatically identifies related files by naming pattern
 
 ---
 
