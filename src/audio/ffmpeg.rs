@@ -8,6 +8,16 @@ use std::path::Path;
 use std::process::Stdio;
 use tokio::process::Command;
 
+/// Audio file metadata extracted from ffprobe
+#[derive(Debug, Clone, Default)]
+pub struct AudioMetadata {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub year: Option<u32>,
+    pub genre: Option<String>,
+}
+
 /// FFmpeg operations wrapper
 #[derive(Clone)]
 pub struct FFmpeg {
@@ -297,6 +307,79 @@ impl FFmpeg {
             .context("Failed to write concat file")?;
 
         Ok(())
+    }
+
+    /// Concatenate M4B files losslessly (copy mode only)
+    pub async fn concat_m4b_files(
+        &self,
+        concat_file: &Path,
+        output_file: &Path,
+    ) -> Result<()> {
+        let mut cmd = Command::new(&self.ffmpeg_path);
+
+        cmd.args([
+            "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i",
+        ])
+        .arg(concat_file)
+        .args([
+            "-c", "copy",           // Lossless copy
+            "-movflags", "+faststart",
+        ])
+        .arg(output_file);
+
+        tracing::debug!("FFmpeg M4B concat command: {:?}", cmd.as_std());
+        tracing::info!("Concatenating M4B files (lossless copy mode)");
+
+        let output = cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .context("Failed to execute ffmpeg")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("FFmpeg M4B concatenation failed: {}", stderr);
+        }
+
+        Ok(())
+    }
+
+    /// Probe metadata from audio file
+    pub async fn probe_metadata(&self, path: &Path) -> Result<AudioMetadata> {
+        let output = Command::new(&self.ffprobe_path)
+            .args([
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_format",
+            ])
+            .arg(path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .context("Failed to execute ffprobe")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("FFprobe failed: {}", stderr);
+        }
+
+        let json: Value = serde_json::from_slice(&output.stdout)
+            .context("Failed to parse ffprobe JSON output")?;
+
+        let tags = &json["format"]["tags"];
+
+        Ok(AudioMetadata {
+            title: tags["title"].as_str().map(String::from),
+            artist: tags["artist"].as_str().map(String::from),
+            album: tags["album"].as_str().map(String::from),
+            year: tags["date"].as_str().and_then(|s| s.get(..4).and_then(|y| y.parse().ok())),
+            genre: tags["genre"].as_str().map(String::from),
+        })
     }
 }
 

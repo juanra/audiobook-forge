@@ -13,6 +13,7 @@ mod batch;
 mod progress;
 mod retry;
 mod organizer;
+mod m4b_merger;
 
 pub use scanner::Scanner;
 pub use analyzer::Analyzer;
@@ -21,3 +22,4 @@ pub use batch::BatchProcessor;
 pub use progress::{BatchProgress, BookProgress, ProcessingStage};
 pub use retry::{RetryConfig, classify_error, retry_async, smart_retry_async, ErrorType};
 pub use organizer::{Organizer, OrganizeResult, OrganizeAction};
+pub use m4b_merger::M4bMerger;
