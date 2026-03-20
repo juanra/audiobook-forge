@@ -27,6 +27,8 @@ pub struct Track {
     pub genre: Option<String>,
     /// Comment
     pub comment: Option<String>,
+    /// Composer
+    pub composer: Option<String>,
 }
 
 impl Track {
@@ -43,6 +45,7 @@ impl Track {
             year: None,
             genre: None,
             comment: None,
+            composer: None,
         }
     }
 

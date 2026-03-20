@@ -14,8 +14,11 @@ pub struct AudioMetadata {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    pub album_artist: Option<String>,
     pub year: Option<u32>,
     pub genre: Option<String>,
+    pub composer: Option<String>,
+    pub comment: Option<String>,
 }
 
 /// FFmpeg operations wrapper
@@ -377,8 +380,11 @@ impl FFmpeg {
             title: tags["title"].as_str().map(String::from),
             artist: tags["artist"].as_str().map(String::from),
             album: tags["album"].as_str().map(String::from),
+            album_artist: tags["album_artist"].as_str().map(String::from),
             year: tags["date"].as_str().and_then(|s| s.get(..4).and_then(|y| y.parse().ok())),
             genre: tags["genre"].as_str().map(String::from),
+            composer: tags["composer"].as_str().map(String::from),
+            comment: tags["comment"].as_str().map(String::from),
         })
     }
 }

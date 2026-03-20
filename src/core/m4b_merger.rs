@@ -137,16 +137,22 @@ impl M4bMerger {
         let title = metadata.title.or_else(|| Some(book_folder.name.clone()));
         let artist = metadata.artist;
         let album = metadata.album.or_else(|| title.clone());
+        let album_artist = metadata.album_artist;
         let year = metadata.year;
         let genre = metadata.genre;
+        let composer = metadata.composer;
+        let comment = metadata.comment;
 
         inject_metadata_atomicparsley(
             output,
             title.as_deref(),
             artist.as_deref(),
             album.as_deref(),
+            album_artist.as_deref(),
             year,
             genre.as_deref(),
+            composer.as_deref(),
+            comment.as_deref(),
             book_folder.cover_file.as_deref(),
         )
         .await

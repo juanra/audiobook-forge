@@ -259,6 +259,8 @@ impl Processor {
         let artist = book_folder.get_album_artist();
         let year = book_folder.get_year();
         let genre = book_folder.get_genre();
+        let comment = book_folder.get_comment();
+        let composer = book_folder.get_composer();
 
         tracing::info!("Injecting metadata using AtomicParsley");
         tracing::debug!(
@@ -272,8 +274,11 @@ impl Processor {
             title.as_deref(),
             artist.as_deref(),
             title.as_deref(), // Use title as album
+            artist.as_deref(), // Album artist
             year,
             genre.as_deref(),
+            composer.as_deref(),
+            comment.as_deref(),
             book_folder.cover_file.as_deref(),
         )
         .await

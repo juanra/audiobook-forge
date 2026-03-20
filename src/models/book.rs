@@ -205,6 +205,16 @@ impl BookFolder {
     pub fn get_genre(&self) -> Option<String> {
         self.tracks.iter().find_map(|t| t.genre.clone())
     }
+
+    /// Get comment from tracks (first non-None value)
+    pub fn get_comment(&self) -> Option<String> {
+        self.tracks.iter().find_map(|t| t.comment.clone())
+    }
+
+    /// Get composer from tracks (first non-None value)
+    pub fn get_composer(&self) -> Option<String> {
+        self.tracks.iter().find_map(|t| t.composer.clone())
+    }
 }
 
 #[cfg(test)]

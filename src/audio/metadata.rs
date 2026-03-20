@@ -18,6 +18,7 @@ pub fn extract_mp3_metadata(track: &mut Track) -> Result<()> {
     track.genre = tag.genre().map(|s| s.to_string());
     track.year = tag.year().map(|y| y as u32);
     track.comment = tag.comments().next().map(|c| c.text.clone());
+    track.composer = tag.get("TCOM").and_then(|frame| frame.content().text()).map(|s| s.to_string());
 
     // Extract track number
     track.track_number = tag.track();
@@ -38,6 +39,7 @@ pub fn extract_m4a_metadata(track: &mut Track) -> Result<()> {
     track.genre = tag.genre().map(|s| s.to_string());
     track.year = tag.year().map(|s| s.parse::<u32>().ok()).flatten();
     track.comment = tag.comment().map(|s| s.to_string());
+    track.composer = tag.composer().map(|s| s.to_string());
 
     // Extract track number
     if let Some(track_num) = tag.track_number() {
@@ -132,8 +134,11 @@ pub async fn inject_metadata_atomicparsley(
     title: Option<&str>,
     artist: Option<&str>,
     album: Option<&str>,
+    album_artist: Option<&str>,
     year: Option<u32>,
     genre: Option<&str>,
+    composer: Option<&str>,
+    comment: Option<&str>,
     cover_art: Option<&Path>,
 ) -> Result<()> {
     let mut cmd = tokio::process::Command::new("AtomicParsley");
@@ -148,11 +153,20 @@ pub async fn inject_metadata_atomicparsley(
     if let Some(album) = album {
         cmd.args(&["--album", album]);
     }
+    if let Some(album_artist) = album_artist {
+        cmd.args(&["--albumArtist", album_artist]);
+    }
     if let Some(year) = year {
         cmd.args(&["--year", &year.to_string()]);
     }
     if let Some(genre) = genre {
         cmd.args(&["--genre", genre]);
+    }
+    if let Some(composer) = composer {
+        cmd.args(&["--composer", composer]);
+    }
+    if let Some(comment) = comment {
+        cmd.args(&["--comment", comment]);
     }
     if let Some(cover) = cover_art {
         cmd.args(&["--artwork", &cover.display().to_string()]);
