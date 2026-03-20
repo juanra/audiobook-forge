@@ -103,7 +103,7 @@ sudo dnf install ffmpeg atomicparsley gpac
 audiobook-forge check
 ```
 
-See [docs/installation.md](docs/installation.md) for detailed setup instructions.
+See the [Installation wiki page](https://github.com/juanra/audiobook-forge/wiki/Installation) for detailed setup instructions.
 
 ---
 
@@ -140,7 +140,7 @@ audiobook-forge match --file "Book.m4b"
 audiobook-forge match --dir /path/to/m4b/files
 ```
 
-See [docs/usage.md](docs/usage.md) for the complete command reference.
+See the [Usage wiki page](https://github.com/juanra/audiobook-forge/wiki/Usage) for the complete command reference.
 
 ---
 
@@ -207,11 +207,11 @@ Recognizes naming patterns like `Part 1`, `Disc 1`, `CD1`, `Book 01.m4b`, etc. C
 
 ## Documentation
 
-- [Installation Guide](docs/installation.md) — setup and dependencies
-- [Usage Guide](docs/usage.md) — commands, examples, and workflows
-- [Configuration Guide](docs/configuration.md) — all YAML and CLI options
-- [Metadata Guide](docs/metadata.md) — metadata management and Audible integration
-- [Troubleshooting](docs/troubleshooting.md) — common issues and solutions
+- [Installation](https://github.com/juanra/audiobook-forge/wiki/Installation) — setup and dependencies
+- [Usage](https://github.com/juanra/audiobook-forge/wiki/Usage) — commands, examples, and workflows
+- [Configuration](https://github.com/juanra/audiobook-forge/wiki/Configuration) — all YAML and CLI options
+- [Metadata](https://github.com/juanra/audiobook-forge/wiki/Metadata) — metadata management and Audible integration
+- [Troubleshooting](https://github.com/juanra/audiobook-forge/wiki/Troubleshooting) — common issues and solutions
 
 ---
 

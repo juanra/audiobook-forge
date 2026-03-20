@@ -79,3 +79,7 @@ temp/
 *.m4b.tmp
 *.part
 .audiobook-cache/
+.serena/
+
+# Internal development plans
+docs/plans/
