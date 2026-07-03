@@ -128,6 +128,23 @@ pub fn extract_embedded_cover(file_path: &Path, output_path: &Path) -> Result<bo
     }
 }
 
+/// Build the AtomicParsley artwork arguments for a cover image.
+///
+/// Emits `--artwork REMOVE_ALL` before the new artwork so repeated runs replace
+/// the cover instead of appending duplicate image streams (issue #11). Returns an
+/// empty vec when there is no cover to embed.
+fn artwork_args(cover_art: Option<&Path>) -> Vec<String> {
+    match cover_art {
+        Some(cover) => vec![
+            "--artwork".to_string(),
+            "REMOVE_ALL".to_string(),
+            "--artwork".to_string(),
+            cover.display().to_string(),
+        ],
+        None => Vec::new(),
+    }
+}
+
 /// Inject metadata into M4B file using AtomicParsley
 pub async fn inject_metadata_atomicparsley(
     file_path: &Path,
@@ -168,9 +185,7 @@ pub async fn inject_metadata_atomicparsley(
     if let Some(comment) = comment {
         cmd.args(&["--comment", comment]);
     }
-    if let Some(cover) = cover_art {
-        cmd.args(&["--artwork", &cover.display().to_string()]);
-    }
+    cmd.args(artwork_args(cover_art));
 
     cmd.args(&["--overWrite"]);
 
@@ -256,10 +271,8 @@ pub async fn inject_audible_metadata(
     // ASIN as custom atom (for Audiobookshelf)
     cmd.args(&["--rDNSatom", &audible.asin, "name=asin", "domain=com.audible"]);
 
-    // Cover art
-    if let Some(cover_path) = cover_art {
-        cmd.args(&["--artwork", &cover_path.display().to_string()]);
-    }
+    // Cover art (strips existing artwork first — issue #11)
+    cmd.args(artwork_args(cover_art));
 
     // Overwrite
     cmd.args(&["--overWrite"]);
@@ -301,5 +314,31 @@ mod tests {
 
         // If file doesn't exist, this will fail - that's OK for now
         let _ = extract_m4a_metadata(&mut track);
+    }
+
+    // Regression test for issue #11: cover embedding must strip existing artwork
+    // before adding the new image, otherwise every run appends a duplicate cover.
+    #[test]
+    fn artwork_args_strips_existing_before_adding() {
+        let cover = PathBuf::from("/tmp/cover.jpg");
+        let args = artwork_args(Some(&cover));
+        assert_eq!(
+            args,
+            vec![
+                "--artwork".to_string(),
+                "REMOVE_ALL".to_string(),
+                "--artwork".to_string(),
+                "/tmp/cover.jpg".to_string(),
+            ]
+        );
+        // REMOVE_ALL must come before the new artwork path.
+        let remove_pos = args.iter().position(|a| a == "REMOVE_ALL").unwrap();
+        let path_pos = args.iter().position(|a| a == "/tmp/cover.jpg").unwrap();
+        assert!(remove_pos < path_pos);
+    }
+
+    #[test]
+    fn artwork_args_empty_without_cover() {
+        assert!(artwork_args(None).is_empty());
     }
 }

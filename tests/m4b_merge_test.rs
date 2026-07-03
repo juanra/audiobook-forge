@@ -104,6 +104,38 @@ fn test_chapter_merge_with_offsets() {
 }
 
 #[test]
+fn test_merge_synthesized_one_chapter_per_file() {
+    // Simulates issue #15: incremental M4B files with no internal chapters. Each
+    // file contributes a single synthesized chapter spanning its full duration.
+    // Merging must yield one sequential chapter per file with cumulative offsets.
+    let file1 = vec![Chapter::new(1, "001 Troy".to_string(), 0, 500_000)];
+    let file2 = vec![Chapter::new(1, "002 Troy".to_string(), 0, 400_000)];
+    let file3 = vec![Chapter::new(1, "003 Troy".to_string(), 0, 600_000)];
+
+    let merged = merge_chapter_lists(&[file1, file2, file3]);
+
+    assert_eq!(merged.len(), 3);
+
+    // Sequential numbering across files.
+    assert_eq!(merged[0].number, 1);
+    assert_eq!(merged[1].number, 2);
+    assert_eq!(merged[2].number, 3);
+
+    // Titles preserved from each source file.
+    assert_eq!(merged[0].title, "001 Troy");
+    assert_eq!(merged[1].title, "002 Troy");
+    assert_eq!(merged[2].title, "003 Troy");
+
+    // Cumulative offsets: each chapter starts where the previous file ended.
+    assert_eq!(merged[0].start_time_ms, 0);
+    assert_eq!(merged[0].end_time_ms, 500_000);
+    assert_eq!(merged[1].start_time_ms, 500_000);
+    assert_eq!(merged[1].end_time_ms, 900_000);
+    assert_eq!(merged[2].start_time_ms, 900_000);
+    assert_eq!(merged[2].end_time_ms, 1_500_000);
+}
+
+#[test]
 fn test_pt_pattern_variation() {
     let files: Vec<&Path> = vec![
         Path::new("Story Pt 1.m4b"),

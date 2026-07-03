@@ -55,14 +55,14 @@ impl M4bMerger {
         let mut all_chapters: Vec<Vec<Chapter>> = Vec::new();
 
         for m4b_file in &m4b_files {
-            match read_m4b_chapters(m4b_file).await {
+            let chapters = match read_m4b_chapters(m4b_file).await {
                 Ok(chapters) => {
                     tracing::debug!(
                         "  {} chapters from: {}",
                         chapters.len(),
                         m4b_file.file_name().unwrap_or_default().to_string_lossy()
                     );
-                    all_chapters.push(chapters);
+                    chapters
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -70,9 +70,30 @@ impl M4bMerger {
                         m4b_file.display(),
                         e
                     );
-                    all_chapters.push(Vec::new());
+                    Vec::new()
                 }
-            }
+            };
+
+            // Fallback: when a source file carries no internal chapters, treat the
+            // whole file as a single chapter so merging incremental (one-file-per-
+            // chapter) audiobooks still produces a chapterized output (issue #15).
+            let chapters = if chapters.is_empty() {
+                match self.synthesize_file_chapter(m4b_file).await {
+                    Ok(chapter) => vec![chapter],
+                    Err(e) => {
+                        tracing::warn!(
+                            "Could not synthesize a chapter for {}: {}",
+                            m4b_file.display(),
+                            e
+                        );
+                        Vec::new()
+                    }
+                }
+            } else {
+                chapters
+            };
+
+            all_chapters.push(chapters);
         }
 
         // Merge chapter lists with adjusted timestamps
@@ -121,6 +142,26 @@ impl M4bMerger {
         tracing::info!("M4B merge complete: {}", output_path.display());
 
         Ok(output_path)
+    }
+
+    /// Synthesize a single chapter spanning the full duration of a source file.
+    ///
+    /// Used as a fallback when a source M4B has no internal chapters (issue #15).
+    /// The chapter title is taken from the file's embedded `title` tag, falling
+    /// back to the filename stem. The chapter number is provisional — the caller's
+    /// `merge_chapter_lists` renumbers chapters sequentially across all files.
+    async fn synthesize_file_chapter(&self, m4b_file: &Path) -> Result<Chapter> {
+        let (duration_ms, embedded_title) =
+            self.ffmpeg.probe_duration_and_title(m4b_file).await?;
+
+        let title = embedded_title.unwrap_or_else(|| {
+            m4b_file
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Chapter".to_string())
+        });
+
+        Ok(Chapter::new(1, title, 0, duration_ms))
     }
 
     /// Copy metadata from first source file to output
