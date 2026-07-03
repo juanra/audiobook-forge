@@ -286,13 +286,19 @@ impl Processor {
 
         tracing::info!("✓ Metadata injection complete");
 
-        // Clean up extracted cover file if it was auto-extracted
+        // Clean up temporary cover files: auto-extracted covers (.extracted_cover.jpg)
+        // and Audible covers downloaded during build (audiobook-forge-cover-*.jpg).
         if let Some(cover_path) = &book_folder.cover_file {
-            if cover_path.file_name().and_then(|n| n.to_str()) == Some(".extracted_cover.jpg") {
+            let name = cover_path.file_name().and_then(|n| n.to_str());
+            let is_extracted = name == Some(".extracted_cover.jpg");
+            let is_audible_temp = name
+                .map(|n| n.starts_with("audiobook-forge-cover-"))
+                .unwrap_or(false);
+            if is_extracted || is_audible_temp {
                 if let Err(e) = std::fs::remove_file(cover_path) {
-                    tracing::debug!("Failed to remove extracted cover file: {}", e);
+                    tracing::debug!("Failed to remove temporary cover file: {}", e);
                 } else {
-                    tracing::debug!("Cleaned up extracted cover file");
+                    tracing::debug!("Cleaned up temporary cover file");
                 }
             }
         }

@@ -363,6 +363,36 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
             } else {
                 tracing::debug!("No ASIN detected and auto-match disabled for: {}", book.name);
             }
+
+            // Download the Audible cover so `build --fetch-audible` embeds cover
+            // art directly, without requiring a separate `enrich` run (issue #10).
+            // Only when a cover was fetched, none is already present locally, and
+            // cover downloading is enabled.
+            if config.metadata.audible.download_covers && book.cover_file.is_none() {
+                if let Some(metadata) = &book.audible_metadata {
+                    if let Some(cover_url) = metadata.cover_url.clone() {
+                        let temp_cover = std::env::temp_dir()
+                            .join(format!("audiobook-forge-cover-{}.jpg", metadata.asin));
+                        match client.download_cover(&cover_url, &temp_cover).await {
+                            Ok(()) => {
+                                tracing::debug!(
+                                    "Downloaded Audible cover for {} -> {}",
+                                    book.name,
+                                    temp_cover.display()
+                                );
+                                book.cover_file = Some(temp_cover);
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to download Audible cover for {}: {:?}",
+                                    book.name,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         let fetched_count = book_folders.iter().filter(|b| b.audible_metadata.is_some()).count();
@@ -466,8 +496,11 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                     );
                 }
                 Err(e) => {
+                    // Use the alternate formatter so the full anyhow context chain
+                    // (including the underlying ffmpeg stderr) is shown, not just the
+                    // top-level "Failed to concatenate M4B files" message (issue #15).
                     println!(
-                        "  {} Failed to merge {}: {}",
+                        "  {} Failed to merge {}: {:#}",
                         style("✗").red(),
                         book.name,
                         e
