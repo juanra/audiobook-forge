@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   like `"Title! @ # $"` normalized to `"title   "` instead of `"title"`, which
   degraded metadata match scoring. Whitespace runs are now collapsed.
 
+### Contributors
+Thanks to the contributors whose work shipped in this release:
+- [@xanium4332](https://github.com/xanium4332) — FLAC source support (#13)
+- [@Haysdp](https://github.com/Haysdp) — AtomicParsley NUL comment crash fix (#14)
+
 ## [2.11.0] - 2026-07-03
 
 ### Fixed
