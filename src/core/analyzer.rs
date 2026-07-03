@@ -40,7 +40,7 @@ impl Analyzer {
                 let mut track = Track::new(mp3_file.clone(), quality);
 
                 // Extract metadata
-                if let Err(e) = extract_metadata(&mut track) {
+                if let Err(e) = extract_metadata(&mut track).await {
                     tracing::warn!(
                         "Failed to extract metadata from {}: {}",
                         mp3_file.display(),

@@ -55,8 +55,11 @@ pub fn extract_m4a_metadata(track: &mut Track) -> Result<()> {
 /// already a runtime dependency and exposes them under `format.tags`, so we reuse
 /// it rather than pulling in a new crate. Vorbis comment keys are conventionally
 /// uppercase but not case-canonical, so lookups are case-insensitive.
-pub fn extract_flac_metadata(track: &mut Track) -> Result<()> {
-    let output = std::process::Command::new("ffprobe")
+pub async fn extract_flac_metadata(track: &mut Track) -> Result<()> {
+    // Use tokio's async Command so this does not block the runtime worker thread
+    // when called from the parallel analysis pipeline, matching every other
+    // ffprobe/ffmpeg call site in the codebase.
+    let output = tokio::process::Command::new("ffprobe")
         .args([
             "-v", "quiet",
             "-print_format", "json",
@@ -64,6 +67,7 @@ pub fn extract_flac_metadata(track: &mut Track) -> Result<()> {
         ])
         .arg(&track.file_path)
         .output()
+        .await
         .context("Failed to execute ffprobe for FLAC metadata")?;
 
     if !output.status.success() {
@@ -108,13 +112,13 @@ pub fn extract_flac_metadata(track: &mut Track) -> Result<()> {
 }
 
 /// Extract metadata from any audio file (auto-detect format)
-pub fn extract_metadata(track: &mut Track) -> Result<()> {
+pub async fn extract_metadata(track: &mut Track) -> Result<()> {
     if track.is_mp3() {
         extract_mp3_metadata(track)
     } else if track.is_m4a() {
         extract_m4a_metadata(track)
     } else if track.is_flac() {
-        extract_flac_metadata(track)
+        extract_flac_metadata(track).await
     } else {
         // Unknown format - skip metadata extraction
         Ok(())
