@@ -5,6 +5,20 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **FLAC source support** (#13): `.flac` files are now accepted as source tracks
+  and transcoded to AAC like MP3/M4A sources, enabling workflows that rip audio
+  CDs to FLAC for maximum fidelity. Track metadata (title, artist, album, track
+  number, etc.) is read from FLAC Vorbis comments via ffprobe.
+
+### Fixed
+- **Concat copy-mode codec check now uses an allowlist**: stream copy into the
+  M4B container is only attempted for codecs that live natively in MP4 (AAC,
+  ALAC). Previously only MP3 was blocklisted, so other non-MP4 codecs (e.g. FLAC)
+  would fall through to a failing `-c copy`.
+
 ## [2.11.0] - 2026-07-03
 
 ### Fixed

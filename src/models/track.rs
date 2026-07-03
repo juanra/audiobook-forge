@@ -75,6 +75,11 @@ impl Track {
     pub fn is_m4a(&self) -> bool {
         matches!(self.get_extension().as_deref(), Some("m4a" | "m4b"))
     }
+
+    /// Check if this is a FLAC file
+    pub fn is_flac(&self) -> bool {
+        matches!(self.get_extension().as_deref(), Some("flac"))
+    }
 }
 
 #[cfg(test)]
@@ -101,5 +106,15 @@ mod tests {
         assert!(track_m4a.is_m4a());
         assert!(track_m4b.is_m4a());
         assert!(!track_m4a.is_mp3());
+    }
+
+    #[test]
+    fn test_flac_extension() {
+        let quality = QualityProfile::new(900, 44100, 2, "flac".to_string(), 3600.0).unwrap();
+        let track = Track::new(PathBuf::from("/path/to/track.flac"), quality);
+
+        assert!(track.is_flac());
+        assert!(!track.is_mp3());
+        assert!(!track.is_m4a());
     }
 }

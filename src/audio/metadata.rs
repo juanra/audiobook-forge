@@ -49,12 +49,76 @@ pub fn extract_m4a_metadata(track: &mut Track) -> Result<()> {
     Ok(())
 }
 
+/// Extract metadata from a FLAC file via ffprobe (reads Vorbis comments).
+///
+/// FLAC tags are Vorbis comments, which id3/mp4ameta cannot read. ffprobe is
+/// already a runtime dependency and exposes them under `format.tags`, so we reuse
+/// it rather than pulling in a new crate. Vorbis comment keys are conventionally
+/// uppercase but not case-canonical, so lookups are case-insensitive.
+pub async fn extract_flac_metadata(track: &mut Track) -> Result<()> {
+    // Use tokio's async Command so this does not block the runtime worker thread
+    // when called from the parallel analysis pipeline, matching every other
+    // ffprobe/ffmpeg call site in the codebase.
+    let output = tokio::process::Command::new("ffprobe")
+        .args([
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+        ])
+        .arg(&track.file_path)
+        .output()
+        .await
+        .context("Failed to execute ffprobe for FLAC metadata")?;
+
+    if !output.status.success() {
+        anyhow::bail!("ffprobe failed to read FLAC metadata");
+    }
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .context("Failed to parse ffprobe JSON output")?;
+
+    // Vorbis comment keys can be any case; collect them lowercased for lookup.
+    let tags: std::collections::HashMap<String, String> = json["format"]["tags"]
+        .as_object()
+        .map(|obj| {
+            obj.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.to_lowercase(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let get = |key: &str| tags.get(key).map(|s| s.to_string());
+
+    track.title = get("title");
+    track.artist = get("artist");
+    track.album = get("album");
+    // Vorbis convention is ALBUMARTIST; ffmpeg also maps to album_artist.
+    track.album_artist = get("albumartist").or_else(|| get("album_artist"));
+    track.genre = get("genre");
+    // Vorbis DATE is often a full date or just a year; take the leading 4 digits.
+    track.year = get("date")
+        .as_deref()
+        .and_then(|s| s.get(..4))
+        .and_then(|y| y.parse::<u32>().ok());
+    track.comment = get("comment").or_else(|| get("description"));
+    track.composer = get("composer");
+
+    // TRACKNUMBER may be "5" or "5/12"; take the part before the slash.
+    track.track_number = get("tracknumber")
+        .or_else(|| get("track"))
+        .and_then(|s| s.split('/').next().and_then(|n| n.trim().parse::<u32>().ok()));
+
+    Ok(())
+}
+
 /// Extract metadata from any audio file (auto-detect format)
-pub fn extract_metadata(track: &mut Track) -> Result<()> {
+pub async fn extract_metadata(track: &mut Track) -> Result<()> {
     if track.is_mp3() {
         extract_mp3_metadata(track)
     } else if track.is_m4a() {
         extract_m4a_metadata(track)
+    } else if track.is_flac() {
+        extract_flac_metadata(track).await
     } else {
         // Unknown format - skip metadata extraction
         Ok(())

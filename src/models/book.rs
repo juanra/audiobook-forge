@@ -144,9 +144,13 @@ impl BookFolder {
             return false;
         }
 
-        // MP3 codec cannot be copied into M4B container - must transcode to AAC
+        // Only codecs that live natively in an MP4/M4B container can be stream-copied.
+        // Everything else (mp3, flac, opus, vorbis, wav, ...) must be transcoded to
+        // AAC. Use an allowlist rather than blocklisting individual codecs so new
+        // source formats don't silently fall through to a failing `-c copy`.
         let first_codec = self.tracks[0].quality.codec.to_lowercase();
-        if first_codec == "mp3" || first_codec == "mp3float" {
+        let is_copyable = matches!(first_codec.as_str(), "aac" | "alac");
+        if !is_copyable {
             return false;
         }
 
@@ -310,5 +314,27 @@ mod tests {
         ];
 
         assert!(!book.can_use_concat_copy());
+
+        // FLAC cannot be stream-copied into an M4B container - must transcode.
+        let flac_quality1 = QualityProfile::new(900, 44100, 2, "flac".to_string(), 3600.0).unwrap();
+        let flac_quality2 = QualityProfile::new(900, 44100, 2, "flac".to_string(), 1800.0).unwrap();
+
+        book.tracks = vec![
+            Track::new(PathBuf::from("1.flac"), flac_quality1),
+            Track::new(PathBuf::from("2.flac"), flac_quality2),
+        ];
+
+        assert!(!book.can_use_concat_copy());
+
+        // ALAC lives natively in MP4/M4B, so it remains copyable.
+        let alac_quality1 = QualityProfile::new(900, 44100, 2, "alac".to_string(), 3600.0).unwrap();
+        let alac_quality2 = QualityProfile::new(900, 44100, 2, "alac".to_string(), 1800.0).unwrap();
+
+        book.tracks = vec![
+            Track::new(PathBuf::from("1.m4a"), alac_quality1),
+            Track::new(PathBuf::from("2.m4a"), alac_quality2),
+        ];
+
+        assert!(book.can_use_concat_copy());
     }
 }
