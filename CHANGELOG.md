@@ -5,6 +5,28 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Interactive `match` selection applied the wrong candidate** (#12): the selected
+  option was recovered by scanning the color-escaped menu label for its first
+  digit, which misread ANSI color codes (e.g. `\x1b[32m`) as the option number.
+  Selection is now dispatched by the chosen list position via `inquire`'s
+  `raw_prompt()`.
+- **`metadata enrich` accumulated duplicate cover images** (#11): every run
+  appended another artwork stream because AtomicParsley's `--artwork` appends.
+  Existing artwork is now stripped with `--artwork REMOVE_ALL` before embedding
+  the new cover.
+- **`build --fetch-audible` did not embed cover art** (#10): the fetched Audible
+  cover URL was discarded. The cover is now downloaded and embedded during the
+  build, without requiring a separate `enrich` run. Respects an existing local
+  cover and the `metadata.audible.download_covers` config.
+- **M4B merge of chapterless files failed with 0 chapters** (#15): merging
+  incremental audiobooks (one file per chapter, no internal chapters) now
+  synthesizes a single chapter per source file from its duration and title. The
+  underlying ffmpeg error is also surfaced in full instead of being hidden behind
+  a generic "Failed to concatenate M4B files" message.
+
 ## [2.9.0] - 2025-12-29
 
 ### Added
