@@ -3,9 +3,11 @@
 use crate::models::{AudibleMetadata, CurrentMetadata, MatchCandidate, MatchConfidence, AudibleAuthor};
 use anyhow::Result;
 use console::style;
+use inquire::list_option::ListOption;
 use inquire::{Confirm, CustomType, Select, Text};
 
 /// User's choice after viewing candidates
+#[derive(Debug)]
 pub enum UserChoice {
     SelectMatch(usize), // Index into candidates
     Skip,               // Leave file unchanged
@@ -60,44 +62,45 @@ pub fn prompt_match_selection(
         options.push(color_fn(label));
     }
 
-    // Add action options
+    // Action options are appended after the candidates. Selection is dispatched by
+    // the chosen POSITION (see `dispatch_selection`) — NOT by parsing the label,
+    // which previously misread ANSI SGR digits (e.g. "\x1b[32m") as the option
+    // number and applied the wrong candidate (see issue #12).
     options.push(style("───────────────────────────────────").dim().to_string());
     options.push(style("[S] Skip this file").yellow().to_string());
     options.push(style("[M] Enter metadata manually").cyan().to_string());
     options.push(style("[R] Search with different terms").blue().to_string());
 
-    // Show select menu
-    let selection = Select::new("Select an option:", options)
+    // Show select menu and read back the chosen POSITION, not the label text.
+    let ListOption { index, .. } = Select::new("Select an option:", options)
         .with_page_size(15)
-        .prompt()?;
+        .raw_prompt()?;
 
-    // Parse selection
-    // Find first digit in the selection string (skipping any ANSI color codes)
-    for (idx, ch) in selection.chars().enumerate() {
-        if ch.is_ascii_digit() {
-            let digit = ch.to_digit(10).unwrap() as usize;
-            // Validate it's a valid candidate index
-            if digit >= 1 && digit <= candidates.len() {
-                return Ok(UserChoice::SelectMatch(digit - 1));
-            }
-            // If we found a digit but it's not valid, stop searching
-            break;
-        }
-        // Stop searching after first 20 characters to avoid matching digits in titles
-        if idx >= 20 {
-            break;
-        }
-    }
+    Ok(dispatch_selection(index, candidates.len()))
+}
 
-    // Check for action options
-    if selection.contains("[S]") {
-        Ok(UserChoice::Skip)
-    } else if selection.contains("[M]") {
-        Ok(UserChoice::ManualEntry)
-    } else if selection.contains("[R]") {
-        Ok(UserChoice::CustomSearch)
+/// Map the chosen menu position to a [`UserChoice`].
+///
+/// Options are laid out as: `[0..n)` candidates, `[n]` separator, `[n+1]` Skip,
+/// `[n+2]` Manual entry, `[n+3]` Custom search. Dispatching by position (rather
+/// than by parsing the color-escaped label) is what fixes issue #12.
+fn dispatch_selection(index: usize, num_candidates: usize) -> UserChoice {
+    let separator_idx = num_candidates;
+    let skip_idx = separator_idx + 1;
+    let manual_idx = skip_idx + 1;
+    let search_idx = manual_idx + 1;
+
+    if index < num_candidates {
+        UserChoice::SelectMatch(index)
+    } else if index == skip_idx {
+        UserChoice::Skip
+    } else if index == manual_idx {
+        UserChoice::ManualEntry
+    } else if index == search_idx {
+        UserChoice::CustomSearch
     } else {
-        Ok(UserChoice::Skip) // Fallback
+        // Separator line or anything unexpected: leave the file unchanged.
+        UserChoice::Skip
     }
 }
 
@@ -271,4 +274,45 @@ fn style_red(s: String) -> String {
 }
 fn style_dim(s: String) -> String {
     style(s).dim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression test for issue #12: selecting a candidate by position must map to
+    // that exact candidate. The previous implementation reverse-parsed the index
+    // out of the color-escaped label and misread ANSI SGR digits, so selecting
+    // option 1 applied option 3's metadata.
+    #[test]
+    fn dispatch_selects_candidate_by_position() {
+        // 3 candidates -> positions 0,1,2 are candidates.
+        for i in 0..3 {
+            match dispatch_selection(i, 3) {
+                UserChoice::SelectMatch(idx) => assert_eq!(idx, i),
+                other => panic!("position {i} should select candidate {i}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn dispatch_maps_action_rows_after_candidates() {
+        // Layout for 3 candidates: [0,1,2]=candidates, 3=separator, 4=Skip,
+        // 5=Manual, 6=Search.
+        assert!(matches!(dispatch_selection(3, 3), UserChoice::Skip)); // separator
+        assert!(matches!(dispatch_selection(4, 3), UserChoice::Skip));
+        assert!(matches!(dispatch_selection(5, 3), UserChoice::ManualEntry));
+        assert!(matches!(dispatch_selection(6, 3), UserChoice::CustomSearch));
+    }
+
+    #[test]
+    fn dispatch_out_of_range_is_skip() {
+        assert!(matches!(dispatch_selection(99, 3), UserChoice::Skip));
+    }
+
+    #[test]
+    fn dispatch_single_candidate() {
+        assert!(matches!(dispatch_selection(0, 1), UserChoice::SelectMatch(0)));
+        assert!(matches!(dispatch_selection(2, 1), UserChoice::Skip)); // Skip row
+    }
 }
