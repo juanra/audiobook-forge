@@ -5,19 +5,27 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.11.1] - 2026-07-03
 
 ### Added
 - **FLAC source support** (#13): `.flac` files are now accepted as source tracks
   and transcoded to AAC like MP3/M4A sources, enabling workflows that rip audio
   CDs to FLAC for maximum fidelity. Track metadata (title, artist, album, track
-  number, etc.) is read from FLAC Vorbis comments via ffprobe.
+  number, etc.) is read from FLAC Vorbis comments via ffprobe. Thanks to
+  @xanium4332 for the initial contribution.
 
 ### Fixed
+- **AtomicParsley crash on NUL characters in comment tags** (#14): comment
+  metadata is now sanitized (embedded NUL characters stripped) before being
+  passed to AtomicParsley, which previously failed on such tags. Thanks to
+  @Haysdp for the fix.
 - **Concat copy-mode codec check now uses an allowlist**: stream copy into the
   M4B container is only attempted for codecs that live natively in MP4 (AAC,
   ALAC). Previously only MP3 was blocklisted, so other non-MP4 codecs (e.g. FLAC)
   would fall through to a failing `-c copy`.
+- **`normalize_string` left trailing whitespace after stripping symbols**: titles
+  like `"Title! @ # $"` normalized to `"title   "` instead of `"title"`, which
+  degraded metadata match scoring. Whitespace runs are now collapsed.
 
 ## [2.11.0] - 2026-07-03
 
