@@ -387,6 +387,47 @@ impl FFmpeg {
             comment: tags["comment"].as_str().map(String::from),
         })
     }
+
+    /// Probe an audio file's duration (ms) and embedded title in one ffprobe call.
+    ///
+    /// Used when merging chapterless M4B files: each file's duration becomes the
+    /// span, and its title the label, of a synthesized one-chapter-per-file entry
+    /// (issue #15). A single ffprobe invocation reads both from `format`.
+    pub async fn probe_duration_and_title(&self, path: &Path) -> Result<(u64, Option<String>)> {
+        let output = Command::new(&self.ffprobe_path)
+            .args([
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_format",
+            ])
+            .arg(path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .context("Failed to execute ffprobe")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("FFprobe failed: {}", stderr);
+        }
+
+        let json: Value = serde_json::from_slice(&output.stdout)
+            .context("Failed to parse ffprobe JSON output")?;
+
+        let duration_secs = json["format"]["duration"]
+            .as_str()
+            .and_then(|s| s.parse::<f64>().ok())
+            .with_context(|| format!("No duration found for {}", path.display()))?;
+        let duration_ms = (duration_secs * 1000.0).round() as u64;
+
+        let title = json["format"]["tags"]["title"]
+            .as_str()
+            .map(String::from)
+            .filter(|t| !t.trim().is_empty());
+
+        Ok((duration_ms, title))
+    }
 }
 
 impl Default for FFmpeg {
