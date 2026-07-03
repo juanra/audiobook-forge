@@ -79,17 +79,22 @@ fn duration_distance(a: f64, b: f64) -> f64 {
 
 /// Normalize string for comparison
 pub fn normalize_string(s: &str) -> String {
-    let mut normalized = s.to_lowercase().trim().to_string();
+    let lowered = s.to_lowercase();
+    let lowered = lowered.trim();
 
     // Remove leading "the " if present
-    if normalized.starts_with("the ") {
-        normalized = normalized[4..].to_string();
-    }
+    let without_the = lowered.strip_prefix("the ").unwrap_or(lowered);
 
-    // Remove special characters but keep spaces
-    normalized.retain(|c| c.is_alphanumeric() || c.is_whitespace());
-
-    normalized
+    // Remove special characters (keep alphanumerics and whitespace), then collapse
+    // whitespace runs so symbol-only fragments don't leave stray spaces.
+    // e.g. "Title! @ # $" -> "title", "Author's Name" -> "authors name".
+    without_the
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Score candidates and sort by distance (best first)
