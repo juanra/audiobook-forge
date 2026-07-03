@@ -183,7 +183,10 @@ pub async fn inject_metadata_atomicparsley(
         cmd.args(&["--composer", composer]);
     }
     if let Some(comment) = comment {
-        cmd.args(&["--comment", comment]);
+        let comment = comment.replace('\0', "");
+        if !comment.is_empty() {
+            cmd.args(&["--comment", &comment]);
+        }
     }
     cmd.args(artwork_args(cover_art));
 
