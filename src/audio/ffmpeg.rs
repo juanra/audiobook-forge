@@ -328,6 +328,12 @@ impl FFmpeg {
         ])
         .arg(concat_file)
         .args([
+            // Drop video streams. Source M4B files may embed cover art as an
+            // mjpeg video stream; the ipod/M4B muxer rejects mjpeg in copy mode
+            // ("Could not find tag for codec mjpeg"), so carrying it breaks the
+            // mux (issue #17). Cover art is re-injected downstream via
+            // AtomicParsley from the scanner's extracted/standalone cover file.
+            "-vn",
             "-c", "copy",           // Lossless copy
             "-movflags", "+faststart",
         ])

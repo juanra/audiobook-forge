@@ -186,6 +186,14 @@ impl Scanner {
                         }
                     }
                 }
+            } else if !self.auto_extract_cover && book.cover_file.is_none() {
+                // auto_extract_cover disabled and no standalone cover found:
+                // any embedded cover in the source audio is dropped during
+                // conversion/merge (-vn), so the output will have no cover art.
+                tracing::warn!(
+                    "No cover for '{}': auto_extract_cover is disabled and no cover file found; output will have no cover art",
+                    book.name
+                );
             }
 
             Ok(Some(book))

@@ -5,6 +5,28 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.2] - 2026-07-09
+
+### Fixed
+- **M4B merge failed on sources with embedded cover art** (#17): source M4B files
+  that embed cover art as an mjpeg video stream broke the lossless concat step
+  (`Could not find tag for codec mjpeg ... Could not write header for output
+  file #0`), because the concat command carried all input streams into the
+  ipod/M4B muxer in `-c copy` mode. The merge concat now drops video streams
+  (`-vn`), matching the existing MP3 concat and single-file conversion paths.
+  Cover art is unaffected: it is re-embedded downstream via AtomicParsley from
+  the scanner's extracted or standalone cover file.
+
+### Changed
+- **Warn when a coverless build has `auto_extract_cover` disabled**: if a book
+  has no standalone cover file and `auto_extract_cover` is turned off in config,
+  the scanner now logs a warning that the output will have no cover art (the
+  embedded source cover is dropped during conversion/merge).
+
+### Contributors
+Thanks to the contributors whose work shipped in this release:
+- [@virtualistic](https://github.com/virtualistic) — reported the M4B merge cover-art regression (#17)
+
 ## [2.11.1] - 2026-07-03
 
 ### Added
