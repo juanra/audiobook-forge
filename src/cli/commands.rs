@@ -1,6 +1,6 @@
 //! CLI commands and arguments
 
-use clap::{Parser, Subcommand, Args};
+use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 use crate::VERSION;
@@ -247,6 +247,45 @@ pub enum MetadataCommands {
         #[arg(long, default_value = "interactive")]
         merge_strategy: String,
     },
+
+    /// Export chapter metadata to a file (no transcoding/injection)
+    ///
+    /// Scans a source audiobook directory (same semantics as `build --root`),
+    /// derives chapter timestamps from track durations and filenames, and writes
+    /// an ffmpeg-style `;FFMETADATA1` chapter file. This bypasses AtomicParsley/
+    /// MP4Box, so it is usable even when those tools crash during `build`.
+    /// The resulting file can be injected with:
+    ///   ffmpeg -i book.m4b -i chapters.txt -map_metadata 0 -map_chapters 1 -codec copy out.m4b
+    ExportChapters(ExportChaptersArgs),
+}
+
+/// Arguments for the `metadata export-chapters` subcommand
+#[derive(Args)]
+pub struct ExportChaptersArgs {
+    /// Source audiobook directory (scanned like `build --root`)
+    #[arg(short, long)]
+    pub root: PathBuf,
+
+    /// Output file; defaults to <root>/<book_name>.chapters.txt
+    #[arg(long, short = 'o', value_name = "FILE")]
+    pub output: Option<PathBuf>,
+
+    /// Chapter title source: auto / files / cue / none
+    #[arg(long, default_value = "auto")]
+    pub chapter_source: String,
+
+    /// Timebase for the ffmpeg metadata file (default 1/1000 = milliseconds)
+    #[arg(long, default_value = "1/1000")]
+    pub timebase: String,
+
+    /// Also write a JSON version of the chapters alongside the text file
+    #[arg(long)]
+    pub json: bool,
+
+    /// Treat `root` as an existing M4B file and export its already-embedded
+    /// chapters (useful when only the M4B is available)
+    #[arg(long)]
+    pub from_m4b: bool,
 }
 
 /// Arguments for the match command

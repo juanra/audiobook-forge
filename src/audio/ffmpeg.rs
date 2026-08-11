@@ -61,8 +61,10 @@ impl FFmpeg {
     pub async fn probe_audio_file(&self, path: &Path) -> Result<QualityProfile> {
         let output = Command::new(&self.ffprobe_path)
             .args(&[
-                "-v", "quiet",
-                "-print_format", "json",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
                 "-show_streams",
                 "-show_format",
             ])
@@ -104,7 +106,8 @@ impl FFmpeg {
             json["format"]["bit_rate"]
                 .as_str()
                 .context("No bitrate found")?
-                .parse::<u32>()? / 1000
+                .parse::<u32>()?
+                / 1000
         };
 
         // Extract sample rate
@@ -148,13 +151,8 @@ impl FFmpeg {
     ) -> Result<()> {
         let mut cmd = Command::new(&self.ffmpeg_path);
 
-        cmd.args(&[
-            "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i",
-        ])
-        .arg(concat_file);
+        cmd.args(&["-y", "-f", "concat", "-safe", "0", "-i"])
+            .arg(concat_file);
 
         // Skip video streams (embedded cover art in MP3s)
         cmd.arg("-vn");
@@ -165,10 +163,14 @@ impl FFmpeg {
         } else {
             // Transcode mode
             cmd.args(&[
-                "-c:a", encoder.name(),
-                "-b:a", &format!("{}k", quality.bitrate),
-                "-ar", &quality.sample_rate.to_string(),
-                "-ac", &quality.channels.to_string(),
+                "-c:a",
+                encoder.name(),
+                "-b:a",
+                &format!("{}k", quality.bitrate),
+                "-ar",
+                &quality.sample_rate.to_string(),
+                "-ac",
+                &quality.channels.to_string(),
             ]);
 
             // Use multiple threads for encoding if encoder supports it
@@ -224,8 +226,7 @@ impl FFmpeg {
     ) -> Result<()> {
         let mut cmd = Command::new(&self.ffmpeg_path);
 
-        cmd.args(&["-y", "-i"])
-            .arg(input_file);
+        cmd.args(&["-y", "-i"]).arg(input_file);
 
         // Skip video streams (embedded cover art in MP3s)
         cmd.arg("-vn");
@@ -234,10 +235,14 @@ impl FFmpeg {
             cmd.args(&["-c", "copy"]);
         } else {
             cmd.args(&[
-                "-c:a", encoder.name(),
-                "-b:a", &format!("{}k", quality.bitrate),
-                "-ar", &quality.sample_rate.to_string(),
-                "-ac", &quality.channels.to_string(),
+                "-c:a",
+                encoder.name(),
+                "-b:a",
+                &format!("{}k", quality.bitrate),
+                "-ar",
+                &quality.sample_rate.to_string(),
+                "-ac",
+                &quality.channels.to_string(),
             ]);
 
             // Use multiple threads for encoding if encoder supports it
@@ -292,7 +297,8 @@ impl FFmpeg {
             }
 
             // Get absolute path for better compatibility
-            let abs_path = file.canonicalize()
+            let abs_path = file
+                .canonicalize()
                 .with_context(|| format!("Failed to resolve path: {}", file.display()))?;
 
             // Escape the path for FFmpeg concat format
@@ -306,38 +312,30 @@ impl FFmpeg {
             content.push_str(&format!("file '{}'\n", escaped));
         }
 
-        std::fs::write(output, content)
-            .context("Failed to write concat file")?;
+        std::fs::write(output, content).context("Failed to write concat file")?;
 
         Ok(())
     }
 
     /// Concatenate M4B files losslessly (copy mode only)
-    pub async fn concat_m4b_files(
-        &self,
-        concat_file: &Path,
-        output_file: &Path,
-    ) -> Result<()> {
+    pub async fn concat_m4b_files(&self, concat_file: &Path, output_file: &Path) -> Result<()> {
         let mut cmd = Command::new(&self.ffmpeg_path);
 
-        cmd.args([
-            "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i",
-        ])
-        .arg(concat_file)
-        .args([
-            // Drop video streams. Source M4B files may embed cover art as an
-            // mjpeg video stream; the ipod/M4B muxer rejects mjpeg in copy mode
-            // ("Could not find tag for codec mjpeg"), so carrying it breaks the
-            // mux (issue #17). Cover art is re-injected downstream via
-            // AtomicParsley from the scanner's extracted/standalone cover file.
-            "-vn",
-            "-c", "copy",           // Lossless copy
-            "-movflags", "+faststart",
-        ])
-        .arg(output_file);
+        cmd.args(["-y", "-f", "concat", "-safe", "0", "-i"])
+            .arg(concat_file)
+            .args([
+                // Drop video streams. Source M4B files may embed cover art as an
+                // mjpeg video stream; the ipod/M4B muxer rejects mjpeg in copy mode
+                // ("Could not find tag for codec mjpeg"), so carrying it breaks the
+                // mux (issue #17). Cover art is re-injected downstream via
+                // AtomicParsley from the scanner's extracted/standalone cover file.
+                "-vn",
+                "-c",
+                "copy", // Lossless copy
+                "-movflags",
+                "+faststart",
+            ])
+            .arg(output_file);
 
         tracing::debug!("FFmpeg M4B concat command: {:?}", cmd.as_std());
         tracing::info!("Concatenating M4B files (lossless copy mode)");
@@ -360,11 +358,7 @@ impl FFmpeg {
     /// Probe metadata from audio file
     pub async fn probe_metadata(&self, path: &Path) -> Result<AudioMetadata> {
         let output = Command::new(&self.ffprobe_path)
-            .args([
-                "-v", "quiet",
-                "-print_format", "json",
-                "-show_format",
-            ])
+            .args(["-v", "quiet", "-print_format", "json", "-show_format"])
             .arg(path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -387,7 +381,9 @@ impl FFmpeg {
             artist: tags["artist"].as_str().map(String::from),
             album: tags["album"].as_str().map(String::from),
             album_artist: tags["album_artist"].as_str().map(String::from),
-            year: tags["date"].as_str().and_then(|s| s.get(..4).and_then(|y| y.parse().ok())),
+            year: tags["date"]
+                .as_str()
+                .and_then(|s| s.get(..4).and_then(|y| y.parse().ok())),
             genre: tags["genre"].as_str().map(String::from),
             composer: tags["composer"].as_str().map(String::from),
             comment: tags["comment"].as_str().map(String::from),
@@ -401,11 +397,7 @@ impl FFmpeg {
     /// (issue #15). A single ffprobe invocation reads both from `format`.
     pub async fn probe_duration_and_title(&self, path: &Path) -> Result<(u64, Option<String>)> {
         let output = Command::new(&self.ffprobe_path)
-            .args([
-                "-v", "quiet",
-                "-print_format", "json",
-                "-show_format",
-            ])
+            .args(["-v", "quiet", "-print_format", "json", "-show_format"])
             .arg(path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

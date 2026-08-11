@@ -1,12 +1,12 @@
 //! CLI command handlers
 
-use crate::cli::commands::{BuildArgs, ConfigCommands, OrganizeArgs, MetadataCommands, MatchArgs};
+use crate::audio::{detect_asin, AacEncoder, AudibleClient};
+use crate::cli::commands::{BuildArgs, ConfigCommands, MatchArgs, MetadataCommands, OrganizeArgs};
 use crate::core::{Analyzer, BatchProcessor, M4bMerger, Organizer, RetryConfig, Scanner};
-use crate::models::{BookCase, Config, AudibleRegion, CurrentMetadata, MetadataSource};
-use crate::utils::{ConfigManager, DependencyChecker, AudibleCache, scoring, extraction};
-use crate::audio::{AacEncoder, AudibleClient, detect_asin};
-use crate::ui::{prompt_match_selection, prompt_manual_metadata, prompt_custom_search, UserChoice};
-use anyhow::{Context, Result, bail};
+use crate::models::{AudibleRegion, BookCase, Config, CurrentMetadata, MetadataSource};
+use crate::ui::{prompt_custom_search, prompt_manual_metadata, prompt_match_selection, UserChoice};
+use crate::utils::{extraction, scoring, AudibleCache, ConfigManager, DependencyChecker};
+use anyhow::{bail, Context, Result};
 use console::style;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -19,7 +19,10 @@ fn resolve_encoder(config: &Config, cli_override: Option<&str>) -> AacEncoder {
             tracing::info!("Using encoder from CLI argument: {}", encoder.name());
             return encoder;
         } else {
-            tracing::warn!("Unknown encoder '{}', falling back to auto-detection", encoder_str);
+            tracing::warn!(
+                "Unknown encoder '{}', falling back to auto-detection",
+                encoder_str
+            );
         }
     }
 
@@ -60,8 +63,7 @@ fn resolve_encoder(config: &Config, cli_override: Option<&str>) -> AacEncoder {
 
 /// Try to detect if current directory is an audiobook folder
 fn try_detect_current_as_audiobook() -> Result<Option<PathBuf>> {
-    let current_dir = std::env::current_dir()
-        .context("Failed to get current directory")?;
+    let current_dir = std::env::current_dir().context("Failed to get current directory")?;
 
     // Safety check: Don't auto-detect from filesystem root
     if current_dir.parent().is_none() {
@@ -69,8 +71,7 @@ fn try_detect_current_as_audiobook() -> Result<Option<PathBuf>> {
     }
 
     // Check for MP3 files in current directory
-    let entries = std::fs::read_dir(&current_dir)
-        .context("Failed to read current directory")?;
+    let entries = std::fs::read_dir(&current_dir).context("Failed to read current directory")?;
 
     let mp3_count = entries
         .filter_map(|e| e.ok())
@@ -97,8 +98,7 @@ fn is_audiobook_folder(path: &std::path::Path) -> Result<bool> {
         return Ok(false);
     }
 
-    let entries = std::fs::read_dir(path)
-        .context("Failed to read directory")?;
+    let entries = std::fs::read_dir(path).context("Failed to read directory")?;
 
     let audio_count = entries
         .filter_map(|e| e.ok())
@@ -107,9 +107,9 @@ fn is_audiobook_folder(path: &std::path::Path) -> Result<bool> {
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .map(|ext| {
-                    ext.eq_ignore_ascii_case("mp3") ||
-                    ext.eq_ignore_ascii_case("m4a") ||
-                    ext.eq_ignore_ascii_case("m4b")
+                    ext.eq_ignore_ascii_case("mp3")
+                        || ext.eq_ignore_ascii_case("m4a")
+                        || ext.eq_ignore_ascii_case("m4b")
                 })
                 .unwrap_or(false)
         })
@@ -121,7 +121,9 @@ fn is_audiobook_folder(path: &std::path::Path) -> Result<bool> {
 /// Handle the build command
 pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     // Determine root directory (CLI arg > config > auto-detect > error)
-    let (root, auto_detected) = if let Some(root_path) = args.root.or(config.directories.source.clone()) {
+    let (root, auto_detected) = if let Some(root_path) =
+        args.root.or(config.directories.source.clone())
+    {
         // Check if root itself is an audiobook folder
         if is_audiobook_folder(&root_path)? {
             println!(
@@ -197,10 +199,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     if args.merge_m4b {
         for book in &mut book_folders {
             if book.m4b_files.len() > 1 && book.case == BookCase::C {
-                tracing::info!(
-                    "Forcing merge for {} (--merge-m4b flag)",
-                    book.name
-                );
+                tracing::info!("Forcing merge for {} (--merge-m4b flag)", book.name);
                 book.case = BookCase::E;
             }
         }
@@ -216,7 +215,10 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
 
     // Dry run mode
     if args.dry_run {
-        println!("\n{} DRY RUN MODE - No changes will be made\n", style("ℹ").blue());
+        println!(
+            "\n{} DRY RUN MODE - No changes will be made\n",
+            style("ℹ").blue()
+        );
         for book in &book_folders {
             println!(
                 "  {} {} ({} files, {:.1} min)",
@@ -247,7 +249,8 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     if args.fetch_audible || config.metadata.audible.enabled {
         println!("\n{} Fetching Audible metadata...", style("→").cyan());
 
-        let audible_region = args.audible_region
+        let audible_region = args
+            .audible_region
             .as_deref()
             .or(Some(&config.metadata.audible.region))
             .and_then(|r| AudibleRegion::from_str(r).ok())
@@ -276,7 +279,12 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                 match cache.get(&asin).await {
                     Some(cached) => {
                         book.audible_metadata = Some(cached);
-                        println!("  {} {} (ASIN: {}, cached)", style("✓").green(), book.name, asin);
+                        println!(
+                            "  {} {} (ASIN: {}, cached)",
+                            style("✓").green(),
+                            book.name,
+                            asin
+                        );
                     }
                     None => {
                         // Fetch from API
@@ -291,16 +299,28 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                                 if config.metadata.audible.fetch_chapters {
                                     match client.fetch_chapters(&asin).await {
                                         Ok(chapters) => {
-                                            tracing::debug!("Fetched {} chapters for ASIN: {}", chapters.len(), asin);
+                                            tracing::debug!(
+                                                "Fetched {} chapters for ASIN: {}",
+                                                chapters.len(),
+                                                asin
+                                            );
                                         }
                                         Err(e) => {
-                                            tracing::debug!("No chapters available for ASIN {}: {:?}", asin, e);
+                                            tracing::debug!(
+                                                "No chapters available for ASIN {}: {:?}",
+                                                asin,
+                                                e
+                                            );
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                tracing::warn!("Failed to fetch metadata for {}: {:?}", book.name, e);
+                                tracing::warn!(
+                                    "Failed to fetch metadata for {}: {:?}",
+                                    book.name,
+                                    e
+                                );
                                 println!("  {} {} - fetch failed", style("⚠").yellow(), book.name);
                             }
                         }
@@ -320,7 +340,12 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                         match cache.get(asin).await {
                             Some(cached) => {
                                 book.audible_metadata = Some(cached);
-                                println!("  {} {} (matched: {}, cached)", style("✓").green(), book.name, asin);
+                                println!(
+                                    "  {} {} (matched: {}, cached)",
+                                    style("✓").green(),
+                                    book.name,
+                                    asin
+                                );
                             }
                             None => {
                                 // Fetch from API
@@ -329,23 +354,44 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                                         // Cache the result
                                         let _ = cache.set(asin, &metadata).await;
                                         book.audible_metadata = Some(metadata);
-                                        println!("  {} {} (matched: {})", style("✓").green(), book.name, asin);
+                                        println!(
+                                            "  {} {} (matched: {})",
+                                            style("✓").green(),
+                                            book.name,
+                                            asin
+                                        );
 
                                         // Fetch chapters if enabled
                                         if config.metadata.audible.fetch_chapters {
                                             match client.fetch_chapters(asin).await {
                                                 Ok(chapters) => {
-                                                    tracing::debug!("Fetched {} chapters for ASIN: {}", chapters.len(), asin);
+                                                    tracing::debug!(
+                                                        "Fetched {} chapters for ASIN: {}",
+                                                        chapters.len(),
+                                                        asin
+                                                    );
                                                 }
                                                 Err(e) => {
-                                                    tracing::debug!("No chapters available for ASIN {}: {:?}", asin, e);
+                                                    tracing::debug!(
+                                                        "No chapters available for ASIN {}: {:?}",
+                                                        asin,
+                                                        e
+                                                    );
                                                 }
                                             }
                                         }
                                     }
                                     Err(e) => {
-                                        tracing::warn!("Failed to fetch metadata after match for {}: {:?}", book.name, e);
-                                        println!("  {} {} - fetch failed", style("⚠").yellow(), book.name);
+                                        tracing::warn!(
+                                            "Failed to fetch metadata after match for {}: {:?}",
+                                            book.name,
+                                            e
+                                        );
+                                        println!(
+                                            "  {} {} - fetch failed",
+                                            style("⚠").yellow(),
+                                            book.name
+                                        );
                                     }
                                 }
                             }
@@ -361,7 +407,10 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                     }
                 }
             } else {
-                tracing::debug!("No ASIN detected and auto-match disabled for: {}", book.name);
+                tracing::debug!(
+                    "No ASIN detected and auto-match disabled for: {}",
+                    book.name
+                );
             }
 
             // Download the Audible cover so `build --fetch-audible` embeds cover
@@ -395,8 +444,12 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
             }
         }
 
-        let fetched_count = book_folders.iter().filter(|b| b.audible_metadata.is_some()).count();
-        println!("{} Fetched metadata for {}/{} books",
+        let fetched_count = book_folders
+            .iter()
+            .filter(|b| b.audible_metadata.is_some())
+            .count();
+        println!(
+            "{} Fetched metadata for {}/{} books",
             style("✓").green(),
             style(fetched_count).cyan(),
             book_folders.len()
@@ -409,13 +462,15 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
         args.out.unwrap_or(root.clone())
     } else {
         // Normal mode: respect config
-        args.out.or_else(|| {
-            if config.directories.output == "same_as_source" {
-                Some(root.clone())
-            } else {
-                Some(PathBuf::from(&config.directories.output))
-            }
-        }).context("No output directory specified")?
+        args.out
+            .or_else(|| {
+                if config.directories.output == "same_as_source" {
+                    Some(root.clone())
+                } else {
+                    Some(PathBuf::from(&config.directories.output))
+                }
+            })
+            .context("No output directory specified")?
     };
 
     // Create batch processor with config settings
@@ -429,7 +484,9 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     let max_concurrent = if config.performance.max_concurrent_encodes == "auto" {
         num_cpus::get() // Use all CPU cores
     } else {
-        config.performance.max_concurrent_encodes
+        config
+            .performance
+            .max_concurrent_encodes
             .parse::<usize>()
             .unwrap_or(num_cpus::get())
             .clamp(1, 16)
@@ -439,7 +496,9 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     let max_concurrent_files = if config.performance.max_concurrent_files_per_book == "auto" {
         num_cpus::get()
     } else {
-        config.performance.max_concurrent_files_per_book
+        config
+            .performance
+            .max_concurrent_files_per_book
             .parse::<usize>()
             .unwrap_or(8)
             .clamp(1, 32)
@@ -489,11 +548,7 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
 
             match merger.merge_m4b_files(&book, &output_dir).await {
                 Ok(output_path) => {
-                    println!(
-                        "  {} Merged: {}",
-                        style("✓").green(),
-                        output_path.display()
-                    );
+                    println!("  {} Merged: {}", style("✓").green(), output_path.display());
                 }
                 Err(e) => {
                     // Use the alternate formatter so the full anyhow context chain
@@ -515,15 +570,15 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
 
     // Process batch (regular conversions)
     if !book_folders.is_empty() {
-        println!("\n{} Processing {} audiobook(s)...\n", style("→").cyan(), book_folders.len());
+        println!(
+            "\n{} Processing {} audiobook(s)...\n",
+            style("→").cyan(),
+            book_folders.len()
+        );
     }
 
     let results = batch_processor
-        .process_batch(
-            book_folders,
-            &output_dir,
-            &config.quality.chapter_source,
-        )
+        .process_batch(book_folders, &output_dir, &config.quality.chapter_source)
         .await;
 
     // Print results
@@ -604,7 +659,10 @@ pub fn handle_organize(args: OrganizeArgs, config: Config) -> Result<()> {
 
     // Dry run notice
     if args.dry_run {
-        println!("\n{} DRY RUN MODE - No changes will be made\n", style("ℹ").blue());
+        println!(
+            "\n{} DRY RUN MODE - No changes will be made\n",
+            style("ℹ").blue()
+        );
     }
 
     // Organize books
@@ -648,7 +706,10 @@ pub fn handle_organize(args: OrganizeArgs, config: Config) -> Result<()> {
         .iter()
         .filter(|r| r.success && r.destination_path.is_some())
         .count();
-    let skipped = results.iter().filter(|r| r.destination_path.is_none()).count();
+    let skipped = results
+        .iter()
+        .filter(|r| r.destination_path.is_none())
+        .count();
     let failed = results.iter().filter(|r| !r.success).count();
 
     println!(
@@ -711,17 +772,21 @@ pub fn handle_config(command: ConfigCommands) -> Result<()> {
         ConfigCommands::Validate { config: _ } => {
             let config_path = ConfigManager::default_config_path()?;
             ConfigManager::load(&config_path)?;
-            println!(
-                "{} Configuration is valid",
-                style("✓").green()
-            );
+            println!("{} Configuration is valid", style("✓").green());
         }
 
         ConfigCommands::Edit => {
             let config_path = ConfigManager::default_config_path()?;
-            println!("{} Opening editor for: {}", style("→").cyan(), style(config_path.display()).yellow());
+            println!(
+                "{} Opening editor for: {}",
+                style("→").cyan(),
+                style(config_path.display()).yellow()
+            );
             // TODO: Implement editor opening
-            println!("{} Editor integration not yet implemented", style("ℹ").blue());
+            println!(
+                "{} Editor integration not yet implemented",
+                style("ℹ").blue()
+            );
         }
     }
 
@@ -734,7 +799,10 @@ pub fn handle_check() -> Result<()> {
 
     let results = vec![
         ("FFmpeg", DependencyChecker::check_ffmpeg().found),
-        ("AtomicParsley", DependencyChecker::check_atomic_parsley().found),
+        (
+            "AtomicParsley",
+            DependencyChecker::check_atomic_parsley().found,
+        ),
         ("MP4Box", DependencyChecker::check_mp4box().found),
     ];
 
@@ -765,7 +833,11 @@ pub fn handle_check() -> Result<()> {
                 }
             }
         } else {
-            println!("  {} {} (not found)", style("✗").red(), style(tool).yellow());
+            println!(
+                "  {} {} (not found)",
+                style("✗").red(),
+                style(tool).yellow()
+            );
         }
     }
 
@@ -785,17 +857,22 @@ pub fn handle_check() -> Result<()> {
 /// Handle the metadata command
 pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Result<()> {
     match command {
-        MetadataCommands::Fetch { asin, title, author, region, output } => {
+        MetadataCommands::Fetch {
+            asin,
+            title,
+            author,
+            region,
+            output,
+        } => {
             println!("{} Fetching Audible metadata...", style("→").cyan());
 
             // Parse region
-            let audible_region = AudibleRegion::from_str(&region)
-                .unwrap_or(AudibleRegion::US);
+            let audible_region = AudibleRegion::from_str(&region).unwrap_or(AudibleRegion::US);
 
             // Create client and cache
             let client = AudibleClient::with_rate_limit(
                 audible_region,
-                config.metadata.audible.rate_limit_per_minute
+                config.metadata.audible.rate_limit_per_minute,
             )?;
             let cache = AudibleCache::with_ttl_hours(config.metadata.audible.cache_duration_hours)?;
 
@@ -815,8 +892,12 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
                 }
             } else if title.is_some() || author.is_some() {
                 // Search by title/author
-                println!("  {} Searching: title={:?}, author={:?}",
-                    style("→").cyan(), title, author);
+                println!(
+                    "  {} Searching: title={:?}, author={:?}",
+                    style("→").cyan(),
+                    title,
+                    author
+                );
 
                 let results = client.search(title.as_deref(), author.as_deref()).await?;
 
@@ -825,9 +906,14 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
                 }
 
                 // Display search results
-                println!("\n{} Found {} result(s):", style("✓").green(), results.len());
+                println!(
+                    "\n{} Found {} result(s):",
+                    style("✓").green(),
+                    results.len()
+                );
                 for (i, result) in results.iter().enumerate().take(5) {
-                    println!("  {}. {} by {}",
+                    println!(
+                        "  {}. {} by {}",
                         i + 1,
                         style(&result.title).yellow(),
                         style(result.authors_string()).cyan()
@@ -835,7 +921,10 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
                 }
 
                 // Fetch first result
-                println!("\n{} Fetching details for first result...", style("→").cyan());
+                println!(
+                    "\n{} Fetching details for first result...",
+                    style("→").cyan()
+                );
                 let asin_to_fetch = &results[0].asin;
 
                 if let Some(cached) = cache.get(asin_to_fetch).await {
@@ -856,10 +945,18 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
                 println!("{}: {}", style("Subtitle").bold(), subtitle);
             }
             if !metadata.authors.is_empty() {
-                println!("{}: {}", style("Author(s)").bold(), metadata.authors_string());
+                println!(
+                    "{}: {}",
+                    style("Author(s)").bold(),
+                    metadata.authors_string()
+                );
             }
             if !metadata.narrators.is_empty() {
-                println!("{}: {}", style("Narrator(s)").bold(), metadata.narrators_string());
+                println!(
+                    "{}: {}",
+                    style("Narrator(s)").bold(),
+                    metadata.narrators_string()
+                );
             }
             if let Some(publisher) = &metadata.publisher {
                 println!("{}: {}", style("Publisher").bold(), publisher);
@@ -895,7 +992,8 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
             if let Some(output_path) = output {
                 let json = serde_json::to_string_pretty(&metadata)?;
                 std::fs::write(&output_path, json)?;
-                println!("\n{} Saved metadata to: {}",
+                println!(
+                    "\n{} Saved metadata to: {}",
                     style("✓").green(),
                     style(output_path.display()).yellow()
                 );
@@ -914,7 +1012,10 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
             update_chapters_only,
             merge_strategy,
         } => {
-            use crate::audio::{read_m4b_chapters, parse_text_chapters, parse_epub_chapters, merge_chapters, inject_chapters_mp4box, write_mp4box_chapters, ChapterMergeStrategy};
+            use crate::audio::{
+                inject_chapters_mp4box, merge_chapters, parse_epub_chapters, parse_text_chapters,
+                read_m4b_chapters, write_mp4box_chapters, ChapterMergeStrategy,
+            };
             use std::str::FromStr;
 
             let action = if update_chapters_only {
@@ -939,9 +1040,16 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
 
             // Handle chapter update if requested
             let chapter_update_performed = if chapters.is_some() || chapters_asin.is_some() {
-                println!("  {} Reading existing chapters from M4B...", style("→").cyan());
+                println!(
+                    "  {} Reading existing chapters from M4B...",
+                    style("→").cyan()
+                );
                 let existing_chapters = read_m4b_chapters(&file).await?;
-                println!("  {} Found {} existing chapters", style("✓").green(), existing_chapters.len());
+                println!(
+                    "  {} Found {} existing chapters",
+                    style("✓").green(),
+                    existing_chapters.len()
+                );
 
                 // Fetch new chapters based on source
                 let new_chapters = if let Some(chapters_file) = chapters {
@@ -952,27 +1060,50 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
                         parse_text_chapters(&chapters_file)?
                     }
                 } else if let Some(asin_val) = chapters_asin {
-                    println!("  {} Fetching chapters from Audnex API...", style("→").cyan());
-                    let audible_region = AudibleRegion::from_str(&region).unwrap_or(AudibleRegion::US);
+                    println!(
+                        "  {} Fetching chapters from Audnex API...",
+                        style("→").cyan()
+                    );
+                    let audible_region =
+                        AudibleRegion::from_str(&region).unwrap_or(AudibleRegion::US);
                     let client = crate::audio::AudibleClient::with_rate_limit(
                         audible_region,
-                        config.metadata.audible.rate_limit_per_minute
+                        config.metadata.audible.rate_limit_per_minute,
                     )?;
                     let audible_chapters = client.fetch_chapters(&asin_val).await?;
-                    audible_chapters.into_iter().enumerate().map(|(i, ch)| ch.to_chapter((i + 1) as u32)).collect()
+                    audible_chapters
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, ch)| ch.to_chapter((i + 1) as u32))
+                        .collect()
                 } else {
                     vec![]
                 };
 
-                println!("  {} Loaded {} new chapters", style("✓").green(), new_chapters.len());
+                println!(
+                    "  {} Loaded {} new chapters",
+                    style("✓").green(),
+                    new_chapters.len()
+                );
 
                 // Merge chapters
-                println!("  {} Merging chapters (strategy: {})...", style("→").cyan(), merge_strategy);
+                println!(
+                    "  {} Merging chapters (strategy: {})...",
+                    style("→").cyan(),
+                    merge_strategy
+                );
                 let merged = merge_chapters(&existing_chapters, &new_chapters, strategy)?;
-                println!("  {} Merged into {} chapters", style("✓").green(), merged.len());
+                println!(
+                    "  {} Merged into {} chapters",
+                    style("✓").green(),
+                    merged.len()
+                );
 
                 // Write chapters to temp file
-                let temp_chapters = std::env::temp_dir().join(format!("chapters_{}.txt", file.file_stem().unwrap().to_string_lossy()));
+                let temp_chapters = std::env::temp_dir().join(format!(
+                    "chapters_{}.txt",
+                    file.file_stem().unwrap().to_string_lossy()
+                ));
                 write_mp4box_chapters(&merged, &temp_chapters)?;
 
                 // Inject chapters back into M4B
@@ -991,7 +1122,8 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
                 if !chapter_update_performed {
                     bail!("--update-chapters-only specified but no chapter source provided (use --chapters or --chapters-asin)");
                 }
-                println!("\n{} Successfully updated chapters: {}",
+                println!(
+                    "\n{} Successfully updated chapters: {}",
                     style("✓").green(),
                     style(file.display()).yellow()
                 );
@@ -1002,8 +1134,9 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
             let asin_to_use = if let Some(asin_val) = asin {
                 asin_val
             } else if auto_detect {
-                detect_asin(&file.display().to_string())
-                    .ok_or_else(|| anyhow::anyhow!("Could not detect ASIN from filename: {}", file.display()))?
+                detect_asin(&file.display().to_string()).ok_or_else(|| {
+                    anyhow::anyhow!("Could not detect ASIN from filename: {}", file.display())
+                })?
             } else {
                 bail!("Must provide --asin or use --auto-detect");
             };
@@ -1011,13 +1144,12 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
             println!("  {} Using ASIN: {}", style("→").cyan(), asin_to_use);
 
             // Parse region
-            let audible_region = AudibleRegion::from_str(&region)
-                .unwrap_or(AudibleRegion::US);
+            let audible_region = AudibleRegion::from_str(&region).unwrap_or(AudibleRegion::US);
 
             // Create client and cache
             let client = AudibleClient::with_rate_limit(
                 audible_region,
-                config.metadata.audible.rate_limit_per_minute
+                config.metadata.audible.rate_limit_per_minute,
             )?;
             let cache = AudibleCache::with_ttl_hours(config.metadata.audible.cache_duration_hours)?;
 
@@ -1053,10 +1185,165 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
             println!("  {} Injecting metadata...", style("→").cyan());
             crate::audio::inject_audible_metadata(&file, &metadata, cover_path.as_deref()).await?;
 
-            println!("\n{} Successfully enriched: {}",
+            println!(
+                "\n{} Successfully enriched: {}",
                 style("✓").green(),
                 style(file.display()).yellow()
             );
+
+            Ok(())
+        }
+
+        MetadataCommands::ExportChapters(args) => {
+            use crate::audio::{
+                default_chapters_output, read_m4b_chapters, write_ffmetadata, write_json,
+            };
+            use crate::core::{Analyzer, Scanner};
+
+            println!("{} Exporting chapter metadata...", style("→").cyan());
+
+            if args.from_m4b {
+                // Fallback path: read chapters already embedded in an existing M4B.
+                if !args.root.exists() {
+                    bail!("File does not exist: {}", args.root.display());
+                }
+                println!(
+                    "  {} Reading chapters from M4B: {}",
+                    style("→").cyan(),
+                    args.root.display()
+                );
+
+                let chapters = read_m4b_chapters(&args.root).await?;
+                if chapters.is_empty() {
+                    bail!("No chapters found in {}", args.root.display());
+                }
+
+                let out = args.output.clone().unwrap_or_else(|| {
+                    let stem = args.root.file_stem().unwrap_or_default().to_string_lossy();
+                    args.root.with_file_name(format!("{}.chapters.txt", stem))
+                });
+
+                write_ffmetadata(&chapters, &out, &args.timebase)?;
+                println!(
+                    "  {} Wrote {} chapters → {}",
+                    style("✓").green(),
+                    chapters.len(),
+                    out.display()
+                );
+
+                if args.json {
+                    let json_path = out.with_extension("json");
+                    write_json(&chapters, &json_path)?;
+                    println!(
+                        "  {} Wrote JSON → {}",
+                        style("✓").green(),
+                        json_path.display()
+                    );
+                }
+
+                let total_min = chapters
+                    .last()
+                    .map(|c| c.end_time_ms as f64 / 60000.0)
+                    .unwrap_or(0.0);
+                println!(
+                    "\n{} Done: {} chapters, total {:.1} min",
+                    style("✓").green(),
+                    chapters.len(),
+                    total_min
+                );
+                return Ok(());
+            }
+
+            // Normal path: scan a source directory (same semantics as `build --root`).
+            let root = args
+                .root
+                .canonicalize()
+                .with_context(|| format!("root does not exist: {}", args.root.display()))?;
+
+            let scanner = Scanner::from_config(&config);
+
+            // Mirror `handle_build`: if root is itself an audiobook folder (audio
+            // files directly inside), scan it as a single book; otherwise treat it
+            // as a library of book subfolders.
+            let book_folders = if is_audiobook_folder(&root)? {
+                vec![scanner.scan_single_directory(&root).with_context(|| {
+                    format!("Failed to scan audiobook folder: {}", root.display())
+                })?]
+            } else {
+                scanner
+                    .scan_directory(&root)
+                    .with_context(|| format!("Failed to scan directory: {}", root.display()))?
+            };
+
+            if book_folders.is_empty() {
+                bail!("No audiobook folders found under {}", root.display());
+            }
+
+            println!(
+                "  {} Found {} audiobook(s)",
+                style("✓").green(),
+                book_folders.len()
+            );
+
+            let analyzer = Analyzer::with_workers(config.processing.parallel_workers as usize)?;
+
+            let single_book = book_folders.len() == 1;
+            let mut exported = 0usize;
+            for mut book in book_folders {
+                analyzer
+                    .analyze_book_folder(&mut book)
+                    .await
+                    .with_context(|| format!("Failed to analyze {}", book.name))?;
+
+                let chapters = crate::audio::generate_chapters(&book, &args.chapter_source)?;
+                if chapters.is_empty() {
+                    println!(
+                        "  {} {} - no chapters generated (skipped)",
+                        style("ℹ").blue(),
+                        book.name
+                    );
+                    continue;
+                }
+
+                let out = args
+                    .output
+                    .clone()
+                    .filter(|_| single_book)
+                    .unwrap_or_else(|| default_chapters_output(&book.folder_path));
+
+                write_ffmetadata(&chapters, &out, &args.timebase)
+                    .with_context(|| format!("Failed to write chapters for {}", book.name))?;
+
+                println!("  {} {} → {}", style("✓").green(), book.name, out.display());
+
+                if args.json {
+                    let json_path = out.with_extension("json");
+                    write_json(&chapters, &json_path)?;
+                    println!("  {}   JSON → {}", style("✓").green(), json_path.display());
+                }
+
+                let total_min = book.get_total_duration() / 60.0;
+                println!(
+                    "  {}   {} chapters, total {:.1} min",
+                    style("→").cyan(),
+                    chapters.len(),
+                    total_min
+                );
+
+                exported += 1;
+            }
+
+            if exported == 0 {
+                println!("\n{} No chapters were exported", style("⚠").yellow());
+            } else {
+                println!(
+                    "\n{} Exported chapters for {} audiobook(s)",
+                    style("✓").green(),
+                    exported
+                );
+                println!("  Next, inject with (metadata preserved from the M4B):");
+                println!("    ffmpeg -i in.m4b -i <chapters.txt> -map_metadata 0 -map_chapters 1 -codec copy out.m4b");
+            }
 
             Ok(())
         }
@@ -1092,9 +1379,7 @@ pub async fn handle_match(args: MatchArgs, config: Config) -> Result<()> {
         config.metadata.audible.rate_limit_per_minute,
         retry_config,
     )?;
-    let cache = AudibleCache::with_ttl_hours(
-        config.metadata.audible.cache_duration_hours
-    )?;
+    let cache = AudibleCache::with_ttl_hours(config.metadata.audible.cache_duration_hours)?;
 
     // Process each file
     let mut processed = 0;
@@ -1221,7 +1506,15 @@ async fn process_single_file(
                     "  {} Applying: {} by {}",
                     style("→").cyan(),
                     style(&selected.metadata.title).yellow(),
-                    style(selected.metadata.authors.first().map(|a| a.name.as_str()).unwrap_or("Unknown")).cyan()
+                    style(
+                        selected
+                            .metadata
+                            .authors
+                            .first()
+                            .map(|a| a.name.as_str())
+                            .unwrap_or("Unknown")
+                    )
+                    .cyan()
                 );
 
                 // Apply directly - selecting is confirming
@@ -1321,7 +1614,10 @@ async fn apply_metadata(
     config: &Config,
 ) -> Result<()> {
     // Download cover if needed
-    let cover_path = if !args.keep_cover && metadata.cover_url.is_some() && config.metadata.audible.download_covers {
+    let cover_path = if !args.keep_cover
+        && metadata.cover_url.is_some()
+        && config.metadata.audible.download_covers
+    {
         let temp_cover = std::env::temp_dir().join(format!("{}.jpg", metadata.asin));
 
         if let Some(cover_url) = &metadata.cover_url {

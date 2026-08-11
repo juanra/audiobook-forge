@@ -59,8 +59,8 @@ impl RetryConfig {
             return self.initial_delay;
         }
 
-        let delay_secs = self.initial_delay.as_secs_f64()
-            * self.backoff_multiplier.powi(attempt as i32);
+        let delay_secs =
+            self.initial_delay.as_secs_f64() * self.backoff_multiplier.powi(attempt as i32);
 
         let delay = Duration::from_secs_f64(delay_secs);
 
@@ -100,11 +100,7 @@ where
 
                 if attempt < config.max_retries {
                     let delay = config.calculate_delay(attempt);
-                    tracing::warn!(
-                        "Attempt {} failed, retrying in {:?}...",
-                        attempt + 1,
-                        delay
-                    );
+                    tracing::warn!("Attempt {} failed, retrying in {:?}...", attempt + 1, delay);
                     sleep(delay).await;
                 } else {
                     tracing::error!("All {} retry attempts failed", config.max_retries + 1);
@@ -137,16 +133,20 @@ pub fn classify_error(error: &anyhow::Error) -> ErrorType {
     }
 
     // 5xx server errors are transient
-    if error_msg.contains("500") || error_msg.contains("502")
-        || error_msg.contains("503") || error_msg.contains("504")
+    if error_msg.contains("500")
+        || error_msg.contains("502")
+        || error_msg.contains("503")
+        || error_msg.contains("504")
         || error_msg.contains("server error")
     {
         return ErrorType::Transient;
     }
 
     // 4xx client errors are permanent (except 429 handled above)
-    if error_msg.contains("400") || error_msg.contains("401")
-        || error_msg.contains("403") || error_msg.contains("404")
+    if error_msg.contains("400")
+        || error_msg.contains("401")
+        || error_msg.contains("403")
+        || error_msg.contains("404")
         || error_msg.contains("client error")
     {
         return ErrorType::Permanent;
@@ -237,11 +237,7 @@ where
 
                 if attempt < config.max_retries {
                     let delay = config.calculate_delay(attempt);
-                    tracing::warn!(
-                        "Transient error on attempt {}: {:?}",
-                        attempt + 1,
-                        e
-                    );
+                    tracing::warn!("Transient error on attempt {}: {:?}", attempt + 1, e);
                     tracing::warn!(
                         "Retrying in {:?}... ({} attempts remaining)",
                         delay,
@@ -294,12 +290,8 @@ mod tests {
         assert_eq!(config.calculate_delay(3), Duration::from_secs(8));
 
         // Test max delay clamping
-        let config = RetryConfig::with_settings(
-            5,
-            Duration::from_secs(1),
-            Duration::from_secs(5),
-            2.0,
-        );
+        let config =
+            RetryConfig::with_settings(5, Duration::from_secs(1), Duration::from_secs(5), 2.0);
         assert_eq!(config.calculate_delay(10), Duration::from_secs(5));
     }
 

@@ -25,8 +25,7 @@ impl ConfigManager {
             .join("audiobook-forge");
 
         if !config_dir.exists() {
-            fs::create_dir_all(&config_dir)
-                .context("Failed to create config directory")?;
+            fs::create_dir_all(&config_dir).context("Failed to create config directory")?;
         }
 
         Ok(config_dir)
@@ -67,13 +66,11 @@ impl ConfigManager {
         // Ensure parent directory exists
         if let Some(parent) = config_path.parent() {
             if !parent.exists() {
-                fs::create_dir_all(parent)
-                    .context("Failed to create config directory")?;
+                fs::create_dir_all(parent).context("Failed to create config directory")?;
             }
         }
 
-        let yaml = serde_yaml::to_string(config)
-            .context("Failed to serialize config to YAML")?;
+        let yaml = serde_yaml::to_string(config).context("Failed to serialize config to YAML")?;
 
         fs::write(&config_path, yaml)
             .with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
@@ -156,8 +153,7 @@ impl ConfigManager {
     /// Show current configuration
     pub fn show(path: Option<&PathBuf>) -> Result<String> {
         let config = Self::load_or_default(path)?;
-        let yaml = serde_yaml::to_string(&config)
-            .context("Failed to serialize config")?;
+        let yaml = serde_yaml::to_string(&config).context("Failed to serialize config")?;
         Ok(yaml)
     }
 }

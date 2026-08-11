@@ -1,6 +1,8 @@
 //! Scoring and distance calculation for metadata matching
 
-use crate::models::{AudibleMetadata, CurrentMetadata, MatchCandidate, MetadataDistance, MatchConfidence};
+use crate::models::{
+    AudibleMetadata, CurrentMetadata, MatchCandidate, MatchConfidence, MetadataDistance,
+};
 
 /// Calculate distance between current metadata and Audible candidate
 pub fn calculate_distance(
@@ -19,7 +21,9 @@ pub fn calculate_distance(
     // Author comparison (weight: 0.3)
     if let Some(cur_author) = &current.author {
         // Compare against all Audible authors, use best match
-        let author_dist = candidate.authors.iter()
+        let author_dist = candidate
+            .authors
+            .iter()
             .map(|a| string_distance(cur_author, &a.name))
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap_or(1.0);
@@ -117,7 +121,8 @@ pub fn score_and_sort(
 
     // Sort by distance (ascending = best first)
     scored.sort_by(|a, b| {
-        a.distance.total_distance()
+        a.distance
+            .total_distance()
             .partial_cmp(&b.distance.total_distance())
             .unwrap()
     });
@@ -150,7 +155,7 @@ mod tests {
 
         // Similar strings
         let dist = string_distance("Project Hail Mary", "Project Haile Mary");
-        assert!(dist > 0.0 && dist < 0.15);  // Small typo
+        assert!(dist > 0.0 && dist < 0.15); // Small typo
 
         // Different strings
         let dist = string_distance("Completely Different", "Not the Same");
@@ -160,30 +165,33 @@ mod tests {
     #[test]
     fn test_normalize_string() {
         assert_eq!(normalize_string("The Hobbit"), "hobbit");
-        assert_eq!(normalize_string("  Project Hail Mary  "), "project hail mary");
+        assert_eq!(
+            normalize_string("  Project Hail Mary  "),
+            "project hail mary"
+        );
         assert_eq!(normalize_string("Author's Name"), "authors name");
         assert_eq!(normalize_string("Title! @ # $"), "title");
     }
 
     #[test]
     fn test_year_distance() {
-        assert_eq!(year_distance(2020, 2020), 0.0);  // Same year
-        assert_eq!(year_distance(2020, 2025), 0.5);  // 5 years apart
-        assert_eq!(year_distance(2020, 2030), 1.0);  // 10 years apart
-        assert!(year_distance(2020, 2035) >= 1.0);    // >10 years (clamped to 1.0)
+        assert_eq!(year_distance(2020, 2020), 0.0); // Same year
+        assert_eq!(year_distance(2020, 2025), 0.5); // 5 years apart
+        assert_eq!(year_distance(2020, 2030), 1.0); // 10 years apart
+        assert!(year_distance(2020, 2035) >= 1.0); // >10 years (clamped to 1.0)
     }
 
     #[test]
     fn test_duration_distance() {
         // Within 5% tolerance
-        assert_eq!(duration_distance(3600.0, 3620.0), 0.0);  // ~0.5% diff
+        assert_eq!(duration_distance(3600.0, 3620.0), 0.0); // ~0.5% diff
 
         // 5-20% range
-        let dist = duration_distance(3600.0, 3960.0);  // 10% diff
+        let dist = duration_distance(3600.0, 3960.0); // 10% diff
         assert!(dist > 0.0 && dist < 0.75);
 
         // Over 20% difference
-        let dist = duration_distance(3600.0, 4500.0);  // 25% diff
+        let dist = duration_distance(3600.0, 4500.0); // 25% diff
         assert_eq!(dist, 1.0);
     }
 

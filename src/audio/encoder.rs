@@ -134,7 +134,10 @@ mod tests {
 
     #[test]
     fn test_encoder_from_str() {
-        assert_eq!(AacEncoder::from_str("aac_at"), Some(AacEncoder::AppleSilicon));
+        assert_eq!(
+            AacEncoder::from_str("aac_at"),
+            Some(AacEncoder::AppleSilicon)
+        );
         assert_eq!(AacEncoder::from_str("libfdk_aac"), Some(AacEncoder::LibFdk));
         assert_eq!(AacEncoder::from_str("libfdk"), Some(AacEncoder::LibFdk));
         assert_eq!(AacEncoder::from_str("aac"), Some(AacEncoder::Native));

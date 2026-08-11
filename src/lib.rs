@@ -7,16 +7,16 @@
 //! - Chapter generation and management
 //! - Parallel batch processing
 
-pub mod cli;
-pub mod models;
-pub mod core;
 pub mod audio;
-pub mod utils;
+pub mod cli;
+pub mod core;
+pub mod models;
 pub mod ui;
+pub mod utils;
 
 // Re-export commonly used types
-pub use models::{BookFolder, Track, QualityProfile, ProcessingResult, BookCase};
-pub use core::{Scanner, Analyzer, Processor, BatchProcessor};
+pub use core::{Analyzer, BatchProcessor, Processor, Scanner};
+pub use models::{BookCase, BookFolder, ProcessingResult, QualityProfile, Track};
 pub use utils::Config;
 
 /// Library version
