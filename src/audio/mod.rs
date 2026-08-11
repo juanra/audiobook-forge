@@ -7,16 +7,26 @@
 //! - Audible: Audible metadata fetching and integration
 //! - Encoder: AAC encoder detection and selection
 
+pub mod audible;
+mod chapter_import;
+mod chapters;
+pub mod encoder;
 mod ffmpeg;
 mod metadata;
-mod chapters;
-pub mod audible;
-pub mod encoder;
-mod chapter_import;
 
-pub use ffmpeg::{FFmpeg, AudioMetadata};
-pub use metadata::{extract_metadata, extract_mp3_metadata, extract_m4a_metadata, extract_flac_metadata, inject_metadata_atomicparsley, inject_audible_metadata, extract_embedded_cover};
-pub use chapters::{Chapter, generate_chapters_from_files, parse_cue_file, write_mp4box_chapters, inject_chapters_mp4box};
-pub use audible::{AudibleClient, detect_asin, clean_sequence};
-pub use encoder::{AacEncoder, get_encoder, EncoderDetector};
-pub use chapter_import::{ChapterSource, ChapterMergeStrategy, ChapterComparison, parse_text_chapters, parse_epub_chapters, merge_chapters, merge_chapter_lists, read_m4b_chapters};
+pub use audible::{clean_sequence, detect_asin, AudibleClient};
+pub use chapter_import::{
+    merge_chapter_lists, merge_chapters, parse_epub_chapters, parse_text_chapters,
+    read_m4b_chapters, ChapterComparison, ChapterMergeStrategy, ChapterSource,
+};
+pub use chapters::{
+    default_chapters_output, generate_chapters, generate_chapters_from_files,
+    inject_chapters_mp4box, parse_cue_file, write_ffmetadata, write_json, write_mp4box_chapters,
+    Chapter,
+};
+pub use encoder::{get_encoder, AacEncoder, EncoderDetector};
+pub use ffmpeg::{AudioMetadata, FFmpeg};
+pub use metadata::{
+    extract_embedded_cover, extract_flac_metadata, extract_m4a_metadata, extract_metadata,
+    extract_mp3_metadata, inject_audible_metadata, inject_metadata_atomicparsley,
+};

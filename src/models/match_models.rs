@@ -114,7 +114,7 @@ impl CurrentMetadata {
             author: self.author.or(other.author),
             year: self.year.or(other.year),
             duration: self.duration.or(other.duration),
-            source: self.source,  // Keep original source
+            source: self.source, // Keep original source
         }
     }
 }
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn test_metadata_distance() {
         let mut distance = MetadataDistance::new();
-        distance.add_penalty("title", 0.1, 0.4);  // 0.04 weighted
+        distance.add_penalty("title", 0.1, 0.4); // 0.04 weighted
         distance.add_penalty("author", 0.2, 0.3); // 0.06 weighted
 
         assert!((distance.total_distance() - 0.10).abs() < 0.001);

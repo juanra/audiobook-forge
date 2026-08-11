@@ -1,6 +1,6 @@
 //! Directory scanner for discovering audiobook folders
 
-use crate::models::{BookFolder, BookCase, Config};
+use crate::models::{BookCase, BookFolder, Config};
 use anyhow::{Context, Result};
 use std::path::Path;
 use walkdir::WalkDir;
@@ -146,7 +146,10 @@ impl Scanner {
         book.classify();
 
         // Only return if it's a valid audiobook folder (Cases A, B, C, or E)
-        if matches!(book.case, BookCase::A | BookCase::B | BookCase::C | BookCase::E) {
+        if matches!(
+            book.case,
+            BookCase::A | BookCase::B | BookCase::C | BookCase::E
+        ) {
             // Sort MP3 files naturally
             crate::utils::natural_sort(&mut book.mp3_files);
 

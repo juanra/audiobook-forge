@@ -179,10 +179,7 @@ mod tests {
 
     #[test]
     fn test_detect_numeric_suffix() {
-        let files = vec![
-            Path::new("My Book 01.m4b"),
-            Path::new("My Book 02.m4b"),
-        ];
+        let files = vec![Path::new("My Book 01.m4b"), Path::new("My Book 02.m4b")];
         let result = detect_merge_pattern(&files);
         assert!(result.pattern_detected);
         assert_eq!(result.pattern_type, Some(MergePatternType::NumericSuffix));
@@ -214,7 +211,10 @@ mod tests {
         ];
         sort_by_part_number(&mut files);
         assert_eq!(
-            files.iter().map(|p| p.file_name().unwrap().to_str().unwrap()).collect::<Vec<_>>(),
+            files
+                .iter()
+                .map(|p| p.file_name().unwrap().to_str().unwrap())
+                .collect::<Vec<_>>(),
             vec!["Book Part 1.m4b", "Book Part 2.m4b", "Book Part 3.m4b"]
         );
     }

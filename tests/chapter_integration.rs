@@ -1,6 +1,8 @@
 //! Integration tests for chapter functionality
 
-use audiobook_forge::audio::{Chapter, parse_text_chapters, merge_chapters, ChapterMergeStrategy, ChapterComparison};
+use audiobook_forge::audio::{
+    merge_chapters, parse_text_chapters, Chapter, ChapterComparison, ChapterMergeStrategy,
+};
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -127,9 +129,7 @@ fn test_merge_skip_on_mismatch_strategy() {
         Chapter::new(2, "Chapter 2".to_string(), 300_000, 600_000),
     ];
 
-    let new = vec![
-        Chapter::new(1, "Single Chapter".to_string(), 0, 600_000),
-    ];
+    let new = vec![Chapter::new(1, "Single Chapter".to_string(), 0, 600_000)];
 
     let result = merge_chapters(&existing, &new, ChapterMergeStrategy::SkipOnMismatch);
 
@@ -176,9 +176,7 @@ fn test_chapter_comparison() {
         Chapter::new(2, "Chapter Two".to_string(), 1000, 2000),
     ];
 
-    let chapters_c = vec![
-        Chapter::new(1, "Only One".to_string(), 0, 2000),
-    ];
+    let chapters_c = vec![Chapter::new(1, "Only One".to_string(), 0, 2000)];
 
     let comp1 = ChapterComparison::new(&chapters_a, &chapters_b);
     assert!(comp1.matches);

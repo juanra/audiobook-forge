@@ -1,8 +1,8 @@
 //! Single book processor
 
 use crate::audio::{
-    generate_chapters_from_files, inject_chapters_mp4box, inject_metadata_atomicparsley,
-    parse_cue_file, write_mp4box_chapters, AacEncoder, FFmpeg,
+    inject_chapters_mp4box, inject_metadata_atomicparsley, write_mp4box_chapters, AacEncoder,
+    FFmpeg,
 };
 use crate::models::{BookFolder, ProcessingResult};
 use anyhow::{Context, Result};
@@ -66,8 +66,7 @@ impl Processor {
 
         // Create output directory if it doesn't exist
         if !output_dir.exists() {
-            std::fs::create_dir_all(output_dir)
-                .context("Failed to create output directory")?;
+            std::fs::create_dir_all(output_dir).context("Failed to create output directory")?;
         }
 
         // Determine output file path
@@ -122,13 +121,7 @@ impl Processor {
             FFmpeg::create_concat_file(&file_refs, &concat_file)?;
 
             self.ffmpeg
-                .concat_audio_files(
-                    &concat_file,
-                    &output_path,
-                    &quality,
-                    use_copy,
-                    self.encoder,
-                )
+                .concat_audio_files(&concat_file, &output_path, &quality, use_copy, self.encoder)
                 .await
                 .context("Failed to concatenate audio files")?;
         } else if self.enable_parallel_encoding && book_folder.tracks.len() > 1 {
@@ -194,7 +187,10 @@ impl Processor {
                 }
             }
 
-            tracing::info!("All {} files encoded, now concatenating...", encoded_files.len());
+            tracing::info!(
+                "All {} files encoded, now concatenating...",
+                encoded_files.len()
+            );
 
             // Step 2: Concatenate the encoded files (fast, no re-encoding)
             let concat_file = temp_dir.join("concat.txt");
@@ -263,17 +259,13 @@ impl Processor {
         let composer = book_folder.get_composer();
 
         tracing::info!("Injecting metadata using AtomicParsley");
-        tracing::debug!(
-            "Metadata: title={:?}, artist={:?}",
-            title,
-            artist
-        );
+        tracing::debug!("Metadata: title={:?}, artist={:?}", title, artist);
 
         inject_metadata_atomicparsley(
             &output_path,
             title.as_deref(),
             artist.as_deref(),
-            title.as_deref(), // Use title as album
+            title.as_deref(),  // Use title as album
             artist.as_deref(), // Album artist
             year,
             genre.as_deref(),
@@ -329,50 +321,9 @@ impl Processor {
         book_folder: &BookFolder,
         chapter_source: &str,
     ) -> Result<Vec<crate::audio::Chapter>> {
-        match chapter_source {
-            "cue" => {
-                // Use CUE file if available
-                if let Some(ref cue_file) = book_folder.cue_file {
-                    tracing::info!("Using CUE file for chapters: {}", cue_file.display());
-                    return parse_cue_file(cue_file);
-                }
-                Ok(Vec::new())
-            }
-            "files" | "auto" => {
-                // Generate chapters from files
-                if book_folder.tracks.len() > 1 {
-                    let files: Vec<&Path> = book_folder
-                        .tracks
-                        .iter()
-                        .map(|t| t.file_path.as_path())
-                        .collect();
-                    let durations: Vec<f64> = book_folder
-                        .tracks
-                        .iter()
-                        .map(|t| t.quality.duration)
-                        .collect();
-
-                    tracing::info!(
-                        "Generating {} chapters from files",
-                        book_folder.tracks.len()
-                    );
-                    Ok(generate_chapters_from_files(&files, &durations))
-                } else {
-                    // Single file - check for CUE
-                    if let Some(ref cue_file) = book_folder.cue_file {
-                        tracing::info!("Using CUE file for single-file book");
-                        parse_cue_file(cue_file)
-                    } else {
-                        Ok(Vec::new())
-                    }
-                }
-            }
-            "none" => Ok(Vec::new()),
-            _ => {
-                tracing::warn!("Unknown chapter source: {}, using auto", chapter_source);
-                self.generate_chapters(book_folder, "auto")
-            }
-        }
+        // Shared implementation lives in `audio::generate_chapters` so the
+        // standalone `metadata export-chapters` command reuses the exact same logic.
+        crate::audio::generate_chapters(book_folder, chapter_source)
     }
 
     /// Create temporary directory for processing
@@ -409,14 +360,20 @@ mod tests {
 
     #[test]
     fn test_processor_with_options() {
-        let processor = Processor::with_options(true, AacEncoder::AppleSilicon, true, 8, None).unwrap();
+        let processor =
+            Processor::with_options(true, AacEncoder::AppleSilicon, true, 8, None).unwrap();
         assert!(processor.keep_temp);
         assert_eq!(processor.encoder, AacEncoder::AppleSilicon);
         assert_eq!(processor.max_concurrent_files, 8);
         assert_eq!(processor.quality_preset, None);
 
-        let processor_with_preset = Processor::with_options(false, AacEncoder::Native, true, 4, Some("high".to_string())).unwrap();
-        assert_eq!(processor_with_preset.quality_preset, Some("high".to_string()));
+        let processor_with_preset =
+            Processor::with_options(false, AacEncoder::Native, true, 4, Some("high".to_string()))
+                .unwrap();
+        assert_eq!(
+            processor_with_preset.quality_preset,
+            Some("high".to_string())
+        );
     }
 
     #[test]

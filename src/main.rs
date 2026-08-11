@@ -1,7 +1,10 @@
 //! Audiobook Forge CLI entry point
 
 use anyhow::{Context, Result};
-use audiobook_forge::cli::{handle_build, handle_check, handle_config, handle_organize, handle_metadata, handle_match, Cli, Commands};
+use audiobook_forge::cli::{
+    handle_build, handle_check, handle_config, handle_match, handle_metadata, handle_organize, Cli,
+    Commands,
+};
 use audiobook_forge::utils::ConfigManager;
 use audiobook_forge::VERSION;
 use clap::Parser;
@@ -67,8 +70,7 @@ fn init_logging(verbose: bool, config: &audiobook_forge::models::Config) -> Resu
         }
     };
 
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(level_str));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level_str));
 
     // Console layer (always present)
     let console_layer = fmt::layer()
@@ -81,21 +83,19 @@ fn init_logging(verbose: bool, config: &audiobook_forge::models::Config) -> Resu
         let log_file = config.logging.log_file.clone().unwrap_or_else(|| {
             let home = dirs::home_dir().expect("Cannot determine home directory");
             let log_dir = home.join(".audiobook-forge").join("logs");
-            std::fs::create_dir_all(&log_dir)
-                .expect("Failed to create log directory");
+            std::fs::create_dir_all(&log_dir).expect("Failed to create log directory");
             log_dir.join("audiobook-forge.log")
         });
 
         // Create log directory
         if let Some(parent) = log_file.parent() {
-            std::fs::create_dir_all(parent)
-                .context("Failed to create log directory")?;
+            std::fs::create_dir_all(parent).context("Failed to create log directory")?;
         }
 
         // Daily rotation
         let file_appender = tracing_appender::rolling::daily(
             log_file.parent().unwrap(),
-            log_file.file_name().unwrap()
+            log_file.file_name().unwrap(),
         );
 
         let file_layer = fmt::layer()
@@ -114,9 +114,7 @@ fn init_logging(verbose: bool, config: &audiobook_forge::models::Config) -> Resu
         tracing::info!("Logging to file: {}", log_file.display());
     } else {
         // Console only
-        tracing_subscriber::registry()
-            .with(console_layer)
-            .init();
+        tracing_subscriber::registry().with(console_layer).init();
     }
 
     Ok(())

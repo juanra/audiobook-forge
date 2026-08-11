@@ -1,7 +1,7 @@
 //! Batch processor for parallel audiobook processing
 
 use crate::audio::AacEncoder;
-use crate::core::{Processor, RetryConfig, smart_retry_async};
+use crate::core::{smart_retry_async, Processor, RetryConfig};
 use crate::models::{BookFolder, ProcessingResult};
 use anyhow::Result;
 use std::path::Path;
@@ -37,7 +37,7 @@ impl BatchProcessor {
             encoder: crate::audio::get_encoder(),
             enable_parallel_encoding: true,
             max_concurrent_encodes: 2, // Default: 2 concurrent encodes
-            max_concurrent_files: 8, // Default: 8 concurrent files per book
+            max_concurrent_files: 8,   // Default: 8 concurrent files per book
             quality_preset: None,
             retry_config: RetryConfig::new(),
         }
@@ -111,12 +111,7 @@ impl BatchProcessor {
                 // Acquire semaphore permit before encoding (limits concurrent encodes)
                 let _permit = encode_semaphore.acquire().await.unwrap();
 
-                tracing::info!(
-                    "[{}/{}] Processing: {}",
-                    index + 1,
-                    total_books,
-                    book.name
-                );
+                tracing::info!("[{}/{}] Processing: {}", index + 1, total_books, book.name);
 
                 // Process with retry logic
                 let result = smart_retry_async(&retry_config, || {
@@ -223,12 +218,24 @@ mod tests {
         assert_eq!(processor.max_concurrent_encodes, 2);
         assert!(!processor.keep_temp);
         // Encoder is auto-detected, just verify it's one of the valid options
-        assert!(matches!(processor.encoder, AacEncoder::AppleSilicon | AacEncoder::LibFdk | AacEncoder::Native));
+        assert!(matches!(
+            processor.encoder,
+            AacEncoder::AppleSilicon | AacEncoder::LibFdk | AacEncoder::Native
+        ));
     }
 
     #[test]
     fn test_batch_processor_with_options() {
-        let processor = BatchProcessor::with_options(8, true, AacEncoder::AppleSilicon, true, 4, 8, None, RetryConfig::new());
+        let processor = BatchProcessor::with_options(
+            8,
+            true,
+            AacEncoder::AppleSilicon,
+            true,
+            4,
+            8,
+            None,
+            RetryConfig::new(),
+        );
         assert_eq!(processor.workers, 8);
         assert_eq!(processor.max_concurrent_encodes, 4);
         assert_eq!(processor.max_concurrent_files, 8);
@@ -249,10 +256,28 @@ mod tests {
 
     #[test]
     fn test_concurrent_encode_clamping() {
-        let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 0, 8, None, RetryConfig::new());
+        let processor = BatchProcessor::with_options(
+            4,
+            false,
+            AacEncoder::Native,
+            true,
+            0,
+            8,
+            None,
+            RetryConfig::new(),
+        );
         assert_eq!(processor.max_concurrent_encodes, 1);
 
-        let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 100, 8, None, RetryConfig::new());
+        let processor = BatchProcessor::with_options(
+            4,
+            false,
+            AacEncoder::Native,
+            true,
+            100,
+            8,
+            None,
+            RetryConfig::new(),
+        );
         assert_eq!(processor.max_concurrent_encodes, 16);
     }
 

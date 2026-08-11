@@ -1,14 +1,13 @@
 //! Audio metadata extraction and manipulation
 
-use crate::models::{Track, AudibleMetadata};
+use crate::models::{AudibleMetadata, Track};
 use anyhow::{Context, Result};
 use id3::TagLike;
 use std::path::Path;
 
 /// Extract metadata from MP3 file using ID3 tags
 pub fn extract_mp3_metadata(track: &mut Track) -> Result<()> {
-    let tag = id3::Tag::read_from_path(&track.file_path)
-        .context("Failed to read ID3 tags")?;
+    let tag = id3::Tag::read_from_path(&track.file_path).context("Failed to read ID3 tags")?;
 
     // Extract basic metadata
     track.title = tag.title().map(|s| s.to_string());
@@ -18,7 +17,10 @@ pub fn extract_mp3_metadata(track: &mut Track) -> Result<()> {
     track.genre = tag.genre().map(|s| s.to_string());
     track.year = tag.year().map(|y| y as u32);
     track.comment = tag.comments().next().map(|c| c.text.clone());
-    track.composer = tag.get("TCOM").and_then(|frame| frame.content().text()).map(|s| s.to_string());
+    track.composer = tag
+        .get("TCOM")
+        .and_then(|frame| frame.content().text())
+        .map(|s| s.to_string());
 
     // Extract track number
     track.track_number = tag.track();
@@ -28,8 +30,8 @@ pub fn extract_mp3_metadata(track: &mut Track) -> Result<()> {
 
 /// Extract metadata from M4A/M4B file
 pub fn extract_m4a_metadata(track: &mut Track) -> Result<()> {
-    let tag = mp4ameta::Tag::read_from_path(&track.file_path)
-        .context("Failed to read M4A metadata")?;
+    let tag =
+        mp4ameta::Tag::read_from_path(&track.file_path).context("Failed to read M4A metadata")?;
 
     // Extract basic metadata
     track.title = tag.title().map(|s| s.to_string());
@@ -60,11 +62,7 @@ pub async fn extract_flac_metadata(track: &mut Track) -> Result<()> {
     // when called from the parallel analysis pipeline, matching every other
     // ffprobe/ffmpeg call site in the codebase.
     let output = tokio::process::Command::new("ffprobe")
-        .args([
-            "-v", "quiet",
-            "-print_format", "json",
-            "-show_format",
-        ])
+        .args(["-v", "quiet", "-print_format", "json", "-show_format"])
         .arg(&track.file_path)
         .output()
         .await
@@ -74,8 +72,8 @@ pub async fn extract_flac_metadata(track: &mut Track) -> Result<()> {
         anyhow::bail!("ffprobe failed to read FLAC metadata");
     }
 
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .context("Failed to parse ffprobe JSON output")?;
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).context("Failed to parse ffprobe JSON output")?;
 
     // Vorbis comment keys can be any case; collect them lowercased for lookup.
     let tags: std::collections::HashMap<String, String> = json["format"]["tags"]
@@ -104,9 +102,11 @@ pub async fn extract_flac_metadata(track: &mut Track) -> Result<()> {
     track.composer = get("composer");
 
     // TRACKNUMBER may be "5" or "5/12"; take the part before the slash.
-    track.track_number = get("tracknumber")
-        .or_else(|| get("track"))
-        .and_then(|s| s.split('/').next().and_then(|n| n.trim().parse::<u32>().ok()));
+    track.track_number = get("tracknumber").or_else(|| get("track")).and_then(|s| {
+        s.split('/')
+            .next()
+            .and_then(|n| n.trim().parse::<u32>().ok())
+    });
 
     Ok(())
 }
@@ -127,8 +127,7 @@ pub async fn extract_metadata(track: &mut Track) -> Result<()> {
 
 /// Extract embedded cover art from MP3 file (APIC frame)
 pub fn extract_mp3_cover_art(file_path: &Path, output_path: &Path) -> Result<bool> {
-    let tag = id3::Tag::read_from_path(file_path)
-        .context("Failed to read ID3 tag")?;
+    let tag = id3::Tag::read_from_path(file_path).context("Failed to read ID3 tag")?;
 
     // Collect pictures to avoid borrow checker issues
     let pictures: Vec<_> = tag.pictures().collect();
@@ -142,8 +141,7 @@ pub fn extract_mp3_cover_art(file_path: &Path, output_path: &Path) -> Result<boo
             picture.picture_type
         );
 
-        std::fs::write(output_path, &picture.data)
-            .context("Failed to write extracted cover")?;
+        std::fs::write(output_path, &picture.data).context("Failed to write extracted cover")?;
 
         Ok(true)
     } else {
@@ -154,8 +152,7 @@ pub fn extract_mp3_cover_art(file_path: &Path, output_path: &Path) -> Result<boo
 
 /// Extract embedded cover art from M4A/M4B file
 pub fn extract_m4a_cover_art(file_path: &Path, output_path: &Path) -> Result<bool> {
-    let tag = mp4ameta::Tag::read_from_path(file_path)
-        .context("Failed to read M4A tag")?;
+    let tag = mp4ameta::Tag::read_from_path(file_path).context("Failed to read M4A tag")?;
 
     // Get artwork (first image)
     if let Some(artwork) = tag.artwork() {
@@ -165,8 +162,7 @@ pub fn extract_m4a_cover_art(file_path: &Path, output_path: &Path) -> Result<boo
             artwork.data.len()
         );
 
-        std::fs::write(output_path, &artwork.data)
-            .context("Failed to write extracted cover")?;
+        std::fs::write(output_path, &artwork.data).context("Failed to write extracted cover")?;
 
         Ok(true)
     } else {
@@ -322,7 +318,12 @@ pub async fn inject_audible_metadata(
 
     // Publisher
     if let Some(publisher) = &audible.publisher {
-        cmd.args(&["--rDNSatom", &format!("{}", publisher), "name=publisher", "domain=com.apple.iTunes"]);
+        cmd.args(&[
+            "--rDNSatom",
+            &format!("{}", publisher),
+            "name=publisher",
+            "domain=com.apple.iTunes",
+        ]);
     }
 
     // Year
@@ -336,7 +337,12 @@ pub async fn inject_audible_metadata(
     }
 
     // ASIN as custom atom (for Audiobookshelf)
-    cmd.args(&["--rDNSatom", &audible.asin, "name=asin", "domain=com.audible"]);
+    cmd.args(&[
+        "--rDNSatom",
+        &audible.asin,
+        "name=asin",
+        "domain=com.audible",
+    ]);
 
     // Cover art (strips existing artwork first — issue #11)
     cmd.args(artwork_args(cover_art));
