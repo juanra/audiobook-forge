@@ -66,9 +66,14 @@ impl Analyzer {
             }
         }
 
-        // Sort tracks by filename (they should already be sorted from scanner)
-        // This is just to ensure consistency
-        tracks.sort_by(|a, b| a.file_path.cmp(&b.file_path));
+        // `buffer_unordered` completes probes out of order. Restore the scanner's
+        // natural order so tracks such as 1, 2, 10 are not emitted as 1, 10, 2.
+        tracks.sort_by(|a, b| {
+            natord::compare(
+                &a.file_path.to_string_lossy(),
+                &b.file_path.to_string_lossy(),
+            )
+        });
 
         book_folder.tracks = tracks;
 
