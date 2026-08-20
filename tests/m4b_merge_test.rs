@@ -136,6 +136,20 @@ fn test_merge_synthesized_one_chapter_per_file() {
 }
 
 #[test]
+fn test_chapter_offsets_use_source_duration_not_last_chapter_end() {
+    let part1 = vec![
+        Chapter::new(1, "Part 1 Chapter 1".to_string(), 0, 4_000),
+        Chapter::new(2, "Part 1 Chapter 2".to_string(), 4_000, 9_000),
+    ];
+    let part2 = vec![Chapter::new(1, "Part 2 Chapter 1".to_string(), 0, 5_000)];
+
+    let merged = merge_chapter_lists(&[part1, part2], &[10_000, 5_000]);
+
+    assert_eq!(merged[2].start_time_ms, 10_000);
+    assert_eq!(merged[2].end_time_ms, 15_000);
+}
+
+#[test]
 fn test_pt_pattern_variation() {
     let files: Vec<&Path> = vec![
         Path::new("Story Pt 1.m4b"),
