@@ -10,7 +10,7 @@ pub struct QualityProfile {
     pub bitrate: u32,
     /// Sample rate in Hz
     pub sample_rate: u32,
-    /// Number of channels (1=mono, 2=stereo)
+    /// Number of audio channels (1=mono, 2=stereo, higher=surround)
     pub channels: u8,
     /// Audio codec (e.g., "mp3", "aac")
     pub codec: String,
@@ -27,8 +27,8 @@ impl QualityProfile {
         if sample_rate == 0 {
             anyhow::bail!("Sample rate must be positive, got {}", sample_rate);
         }
-        if channels != 1 && channels != 2 {
-            anyhow::bail!("Channels must be 1 or 2, got {}", channels);
+        if channels == 0 {
+            anyhow::bail!("Channels must be positive, got {}", channels);
         }
 
         Ok(Self {
@@ -172,7 +172,8 @@ mod tests {
     fn test_quality_validation() {
         assert!(QualityProfile::new(0, 44100, 2, "aac".to_string(), 3600.0).is_err());
         assert!(QualityProfile::new(128, 0, 2, "aac".to_string(), 3600.0).is_err());
-        assert!(QualityProfile::new(128, 44100, 3, "aac".to_string(), 3600.0).is_err());
+        assert!(QualityProfile::new(128, 44100, 0, "aac".to_string(), 3600.0).is_err());
+        assert!(QualityProfile::new(128, 48000, 6, "aac".to_string(), 3600.0).is_ok());
     }
 
     #[test]

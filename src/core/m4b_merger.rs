@@ -2,7 +2,7 @@
 
 use crate::audio::{read_m4b_chapters, merge_chapter_lists, Chapter, FFmpeg};
 use crate::audio::{write_mp4box_chapters, inject_chapters_mp4box, inject_metadata_atomicparsley};
-use crate::models::BookFolder;
+use crate::models::{BookFolder, QualityProfile};
 use crate::utils::sort_by_part_number;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -46,6 +46,15 @@ impl M4bMerger {
             m4b_files.len(),
             book_folder.name
         );
+
+        let source_profiles: Vec<QualityProfile> = futures::future::try_join_all(
+            m4b_files
+                .iter()
+                .map(|file| self.ffmpeg.probe_audio_file(file)),
+        )
+        .await
+        .context("Failed to inspect source M4B audio streams")?;
+        Self::validate_copy_compatibility(&source_profiles)?;
 
         // Create temp directory
         let temp_dir = self.create_temp_dir(&book_folder.name)?;
@@ -144,6 +153,47 @@ impl M4bMerger {
         Ok(output_path)
     }
 
+    /// Reject streams that cannot be safely passed to FFmpeg copy-concat.
+    /// The concat demuxer accepts incompatible streams without an error, which
+    /// can produce an M4B with incorrect timing or channel parameters.
+    fn validate_copy_compatibility(profiles: &[QualityProfile]) -> Result<()> {
+        let Some(first) = profiles.first() else {
+            anyhow::bail!("No M4B audio streams were found to concatenate");
+        };
+
+        if !matches!(first.codec.to_lowercase().as_str(), "aac" | "alac") {
+            anyhow::bail!(
+                "M4B stream codec '{}' cannot be concatenated losslessly; normalize the source files first",
+                first.codec
+            );
+        }
+
+        if let Some(incompatible) = profiles[1..]
+            .iter()
+            .find(|profile| !Self::is_copy_compatible(first, profile))
+        {
+            anyhow::bail!(
+                "M4B audio streams are incompatible for lossless concatenation (first: {} Hz/{} ch/{}, incompatible: {} Hz/{} ch/{}); normalize the source files first",
+                first.sample_rate,
+                first.channels,
+                first.codec,
+                incompatible.sample_rate,
+                incompatible.channels,
+                incompatible.codec
+            );
+        }
+
+        Ok(())
+    }
+
+    /// FFmpeg copy-concat requires stable stream structure, but measured average
+    /// bitrate may legitimately differ between otherwise compatible VBR parts.
+    fn is_copy_compatible(first: &QualityProfile, other: &QualityProfile) -> bool {
+        first.sample_rate == other.sample_rate
+            && first.channels == other.channels
+            && first.codec.eq_ignore_ascii_case(&other.codec)
+    }
+
     /// Synthesize a single chapter spanning the full duration of a source file.
     ///
     /// Used as a fallback when a source M4B has no internal chapters (issue #15).
@@ -221,5 +271,35 @@ impl M4bMerger {
 impl Default for M4bMerger {
     fn default() -> Self {
         Self::new().expect("Failed to create M4B merger")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::QualityProfile;
+
+    #[test]
+    fn incompatible_streams_are_rejected_before_concat() {
+        let mono_44khz = QualityProfile::new(64, 44_100, 1, "aac".to_string(), 1.0).unwrap();
+        let stereo_48khz = QualityProfile::new(128, 48_000, 2, "aac".to_string(), 1.0).unwrap();
+
+        assert!(M4bMerger::validate_copy_compatibility(&[mono_44khz, stereo_48khz]).is_err());
+    }
+
+    #[test]
+    fn compatible_vbr_streams_keep_copy_concat() {
+        let part1 = QualityProfile::new(62, 48_000, 2, "aac".to_string(), 1.0).unwrap();
+        let part2 = QualityProfile::new(63, 48_000, 2, "aac".to_string(), 1.0).unwrap();
+
+        assert!(M4bMerger::validate_copy_compatibility(&[part1, part2]).is_ok());
+    }
+
+    #[test]
+    fn compatible_surround_streams_keep_copy_concat() {
+        let part1 = QualityProfile::new(256, 48_000, 6, "aac".to_string(), 1.0).unwrap();
+        let part2 = QualityProfile::new(255, 48_000, 6, "aac".to_string(), 1.0).unwrap();
+
+        assert!(M4bMerger::validate_copy_compatibility(&[part1, part2]).is_ok());
     }
 }
