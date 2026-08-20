@@ -96,7 +96,9 @@ impl Default for Analyzer {
 mod tests {
     use super::*;
     use crate::models::QualityProfile;
+    use std::fs;
     use std::path::PathBuf;
+    use tempfile::TempDir;
 
     #[test]
     fn test_analyzer_creation() {
@@ -136,5 +138,44 @@ mod tests {
         ];
 
         assert!(!analyzer.can_use_copy_mode(&book));
+    }
+
+    #[tokio::test]
+    async fn analyzed_tracks_keep_the_scanner_natural_order() {
+        let temp_dir = TempDir::new().unwrap();
+        let probe = temp_dir.path().join("ffprobe");
+        fs::write(
+            &probe,
+            "#!/bin/sh\necho '{\"streams\":[{\"codec_type\":\"audio\",\"codec_name\":\"mp3\",\"sample_rate\":\"44100\",\"channels\":2,\"bit_rate\":\"128000\",\"duration\":\"1.0\"}],\"format\":{\"bit_rate\":\"128000\",\"duration\":\"1.0\"}}'\n",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&probe, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let mut book = BookFolder::new(temp_dir.path().join("Book"));
+        book.mp3_files = vec![
+            temp_dir.path().join("track1.mp3"),
+            temp_dir.path().join("track2.mp3"),
+            temp_dir.path().join("track10.mp3"),
+        ];
+        for track in &book.mp3_files {
+            fs::write(track, b"not audio").unwrap();
+        }
+
+        let analyzer = Analyzer {
+            ffmpeg: FFmpeg::with_paths("true".to_string(), probe.to_string_lossy().into_owned()),
+            parallel_workers: 3,
+        };
+        analyzer.analyze_book_folder(&mut book).await.unwrap();
+
+        let names: Vec<_> = book
+            .tracks
+            .iter()
+            .map(|track| track.file_path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["track1.mp3", "track2.mp3", "track10.mp3"]);
     }
 }
