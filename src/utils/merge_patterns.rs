@@ -150,6 +150,43 @@ pub fn sort_by_part_number(files: &mut [std::path::PathBuf]) {
     });
 }
 
+/// Check whether every directory is a sequential disc/part directory.
+///
+/// Recognized names include `CD1`, `Disc 2`, `Disk3`, `Part 4`, and `Pt. 5`.
+/// Requiring a complete sequential set avoids folding ordinary nested library
+/// layouts such as `Author/Book One` and `Author/Book Two` into one book.
+pub fn are_sequential_part_directories(directories: &[std::path::PathBuf]) -> bool {
+    if directories.len() < 2 {
+        return false;
+    }
+
+    lazy_static::lazy_static! {
+        static ref PART_DIRECTORY_REGEX: Regex = Regex::new(
+            r"(?i)^(?:part|pt\.?|disc|disk|cd)\s*(\d+)$"
+        ).unwrap();
+    }
+
+    let mut numbers = Vec::with_capacity(directories.len());
+    for directory in directories {
+        let Some(name) = directory.file_name().and_then(|name| name.to_str()) else {
+            return false;
+        };
+        let Some(captures) = PART_DIRECTORY_REGEX.captures(name) else {
+            return false;
+        };
+        let Some(number) = captures
+            .get(1)
+            .and_then(|value| value.as_str().parse::<u32>().ok())
+        else {
+            return false;
+        };
+        numbers.push(number);
+    }
+
+    numbers.sort_unstable();
+    numbers == (1..=directories.len() as u32).collect::<Vec<_>>()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,5 +254,20 @@ mod tests {
             files.iter().map(|p| p.file_name().unwrap().to_str().unwrap()).collect::<Vec<_>>(),
             vec!["Book Part 1.m4b", "Book Part 2.m4b", "Book Part 3.m4b"]
         );
+    }
+
+    #[test]
+    fn test_sequential_part_directories() {
+        let disc_directories = vec![
+            std::path::PathBuf::from("CD1"),
+            std::path::PathBuf::from("CD2"),
+        ];
+        assert!(are_sequential_part_directories(&disc_directories));
+
+        let book_directories = vec![
+            std::path::PathBuf::from("Book One"),
+            std::path::PathBuf::from("Book Two"),
+        ];
+        assert!(!are_sequential_part_directories(&book_directories));
     }
 }

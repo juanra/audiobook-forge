@@ -12,7 +12,7 @@ pub use config::ConfigManager;
 pub use validation::DependencyChecker;
 pub use sorting::natural_sort;
 pub use cache::{AudibleCache, CacheStats};
-pub use merge_patterns::{detect_merge_pattern, sort_by_part_number, MergePatternResult, MergePatternType};
+pub use merge_patterns::{are_sequential_part_directories, detect_merge_pattern, sort_by_part_number, MergePatternResult, MergePatternType};
 
 // Re-export Config for convenience
 pub use crate::models::Config;

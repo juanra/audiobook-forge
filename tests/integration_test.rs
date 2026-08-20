@@ -304,3 +304,24 @@ fn test_scanner_treats_disc_subdirectories_as_one_audiobook() {
         ["CD1", "CD2"]
     );
 }
+
+#[test]
+fn test_scanner_keeps_books_below_author_directory_separate() {
+    let temp_dir = TempDir::new().unwrap();
+    let author = temp_dir.path().join("Author");
+    let book_one = author.join("Book One");
+    let book_two = author.join("Book Two");
+    fs::create_dir_all(&book_one).unwrap();
+    fs::create_dir_all(&book_two).unwrap();
+    fs::write(book_one.join("01.mp3"), b"fake mp3").unwrap();
+    fs::write(book_two.join("01.mp3"), b"fake mp3").unwrap();
+
+    let mut books = Scanner::new().scan_directory(temp_dir.path()).unwrap();
+    books.sort_by(|left, right| left.name.cmp(&right.name));
+
+    assert_eq!(books.len(), 2);
+    assert_eq!(books[0].name, "Book One");
+    assert_eq!(books[1].name, "Book Two");
+    assert_eq!(books[0].mp3_files.len(), 1);
+    assert_eq!(books[1].mp3_files.len(), 1);
+}

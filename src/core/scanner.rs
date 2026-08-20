@@ -107,13 +107,24 @@ impl Scanner {
 
         self.scan_files_in_directory(&mut book, path)?;
 
-        // A common layout stores each disc in an immediate child directory.
-        // Include those files in the parent book rather than treating each disc
-        // as an independent audiobook.
+        // Only fold immediate children into the parent when the parent has no
+        // direct audio and every child is a sequential disc/part directory.
+        // This preserves nested layouts such as Author/Book One and
+        // Author/Book Two as two independent books.
+        let parent_has_audio = !book.mp3_files.is_empty() || !book.m4b_files.is_empty();
+        let mut child_directories = Vec::new();
         for entry in std::fs::read_dir(path).context("Failed to read directory")? {
             let entry = entry.context("Failed to read directory entry")?;
             let child_path = entry.path();
             if child_path.is_dir() && !self.is_hidden(&child_path) {
+                child_directories.push(child_path);
+            }
+        }
+
+        if !parent_has_audio
+            && crate::utils::are_sequential_part_directories(&child_directories)
+        {
+            for child_path in child_directories {
                 self.scan_files_in_directory(&mut book, &child_path)?;
             }
         }
