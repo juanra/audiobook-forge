@@ -86,7 +86,10 @@ fn test_chapter_merge_with_offsets() {
         Chapter::new(2, "Epilogue".to_string(), 600_000, 900_000),
     ];
 
-    let merged = merge_chapter_lists(&[part1_chapters, part2_chapters], &[900_000, 900_000]);
+    let merged = merge_chapter_lists(&[
+        (part1_chapters, 900_000),
+        (part2_chapters, 900_000),
+    ]);
 
     assert_eq!(merged.len(), 4);
 
@@ -112,7 +115,11 @@ fn test_merge_synthesized_one_chapter_per_file() {
     let file2 = vec![Chapter::new(1, "002 Troy".to_string(), 0, 400_000)];
     let file3 = vec![Chapter::new(1, "003 Troy".to_string(), 0, 600_000)];
 
-    let merged = merge_chapter_lists(&[file1, file2, file3], &[500_000, 400_000, 600_000]);
+    let merged = merge_chapter_lists(&[
+        (file1, 500_000),
+        (file2, 400_000),
+        (file3, 600_000),
+    ]);
 
     assert_eq!(merged.len(), 3);
 
@@ -143,7 +150,7 @@ fn test_chapter_offsets_use_source_duration_not_last_chapter_end() {
     ];
     let part2 = vec![Chapter::new(1, "Part 2 Chapter 1".to_string(), 0, 5_000)];
 
-    let merged = merge_chapter_lists(&[part1, part2], &[10_000, 5_000]);
+    let merged = merge_chapter_lists(&[(part1, 10_000), (part2, 5_000)]);
 
     assert_eq!(merged[2].start_time_ms, 10_000);
     assert_eq!(merged[2].end_time_ms, 15_000);

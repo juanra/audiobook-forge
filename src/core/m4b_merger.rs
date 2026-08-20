@@ -52,10 +52,12 @@ impl M4bMerger {
 
         // Step 1: Extract chapters from all files
         tracing::info!("Extracting chapters from source files...");
-        let mut all_chapters: Vec<Vec<Chapter>> = Vec::new();
-        let mut source_durations_ms = Vec::new();
+        let mut chapter_parts: Vec<(Vec<Chapter>, u64)> = Vec::new();
 
         for m4b_file in &m4b_files {
+            // The full media duration is required to position every later
+            // chapter correctly. Continuing without it would knowingly emit
+            // shifted chapter metadata, so a probe failure aborts the merge.
             let (duration_ms, embedded_title) = self
                 .ffmpeg
                 .probe_duration_and_title(m4b_file)
@@ -89,12 +91,11 @@ impl M4bMerger {
                 chapters
             };
 
-            all_chapters.push(chapters);
-            source_durations_ms.push(duration_ms);
+            chapter_parts.push((chapters, duration_ms));
         }
 
         // Merge chapter lists with adjusted timestamps
-        let merged_chapters = merge_chapter_lists(&all_chapters, &source_durations_ms);
+        let merged_chapters = merge_chapter_lists(&chapter_parts);
         tracing::info!("Total merged chapters: {}", merged_chapters.len());
 
         // Step 2: Create concat file for FFmpeg
