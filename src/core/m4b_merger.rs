@@ -110,10 +110,11 @@ impl M4bMerger {
 
         // Step 2: Create concat file for FFmpeg
         let concat_file = temp_dir.join("concat.txt");
-        let concat_inputs = if Self::requires_normalization(&source_profiles) {
+        let requires_normalization = Self::requires_normalization(&source_profiles);
+        let concat_inputs = if requires_normalization {
             let target_profile = Self::normalization_profile(&source_profiles);
             tracing::warn!(
-                "M4B streams differ; normalizing all parts to {} before concatenation",
+                "M4B stream formats differ; normalizing all parts to {} before concatenation. Temporary disk usage may approach the total source size",
                 target_profile
             );
 
@@ -143,7 +144,11 @@ impl M4bMerger {
         let output_filename = book_folder.get_output_filename();
         let output_path = output_dir.join(&output_filename);
 
-        tracing::info!("Concatenating audio (lossless copy mode)...");
+        if requires_normalization {
+            tracing::info!("Concatenating normalized audio streams...");
+        } else {
+            tracing::info!("Concatenating audio (lossless copy mode)...");
+        }
 
         self.ffmpeg
             .concat_m4b_files(&concat_file, &output_path)
@@ -189,11 +194,19 @@ impl M4bMerger {
         !matches!(first.codec.to_lowercase().as_str(), "aac" | "alac")
             || profiles[1..]
                 .iter()
-                .any(|profile| !first.is_compatible_for_concat(profile))
+                .any(|profile| !Self::is_copy_compatible(first, profile))
     }
 
-    /// Choose one lossless-concat-compatible AAC profile that does not lower a
-    /// source stream's bitrate, sample rate, or channel count.
+    /// FFmpeg copy-concat requires stable stream structure, but measured average
+    /// bitrate may legitimately differ between otherwise compatible VBR parts.
+    fn is_copy_compatible(first: &QualityProfile, other: &QualityProfile) -> bool {
+        first.sample_rate == other.sample_rate
+            && first.channels == other.channels
+            && first.codec.eq_ignore_ascii_case(&other.codec)
+    }
+
+    /// Choose one concat-compatible AAC profile that does not lower a source
+    /// stream's bitrate, sample rate, or channel count.
     fn normalization_profile(profiles: &[QualityProfile]) -> QualityProfile {
         QualityProfile {
             bitrate: profiles.iter().map(|p| p.bitrate).max().unwrap_or(128).max(128),
@@ -298,5 +311,21 @@ mod tests {
             mono_44khz,
             stereo_48khz,
         ]));
+    }
+
+    #[test]
+    fn compatible_vbr_streams_keep_copy_concat() {
+        let part1 = QualityProfile::new(62, 48_000, 2, "aac".to_string(), 1.0).unwrap();
+        let part2 = QualityProfile::new(63, 48_000, 2, "aac".to_string(), 1.0).unwrap();
+
+        assert!(!M4bMerger::requires_normalization(&[part1, part2]));
+    }
+
+    #[test]
+    fn compatible_surround_streams_keep_copy_concat() {
+        let part1 = QualityProfile::new(256, 48_000, 6, "aac".to_string(), 1.0).unwrap();
+        let part2 = QualityProfile::new(255, 48_000, 6, "aac".to_string(), 1.0).unwrap();
+
+        assert!(!M4bMerger::requires_normalization(&[part1, part2]));
     }
 }
