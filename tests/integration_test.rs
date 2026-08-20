@@ -278,3 +278,29 @@ fn test_m4a_files_treated_as_mp3() {
     assert_eq!(books[0].case, BookCase::A);
     assert_eq!(books[0].mp3_files.len(), 2); // M4A treated as MP3
 }
+
+#[test]
+fn test_scanner_treats_disc_subdirectories_as_one_audiobook() {
+    let temp_dir = TempDir::new().unwrap();
+    let book = temp_dir.path().join("My Book");
+    let cd1 = book.join("CD1");
+    let cd2 = book.join("CD2");
+    fs::create_dir_all(&cd1).unwrap();
+    fs::create_dir_all(&cd2).unwrap();
+    fs::write(cd1.join("01.mp3"), b"fake mp3").unwrap();
+    fs::write(cd2.join("01.mp3"), b"fake mp3").unwrap();
+
+    let books = Scanner::new().scan_directory(temp_dir.path()).unwrap();
+
+    assert_eq!(books.len(), 1);
+    assert_eq!(books[0].name, "My Book");
+    assert_eq!(books[0].mp3_files.len(), 2);
+    assert_eq!(
+        books[0]
+            .mp3_files
+            .iter()
+            .map(|path| path.parent().unwrap().file_name().unwrap().to_string_lossy())
+            .collect::<Vec<_>>(),
+        ["CD1", "CD2"]
+    );
+}
