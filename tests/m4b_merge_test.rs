@@ -86,7 +86,7 @@ fn test_chapter_merge_with_offsets() {
         Chapter::new(2, "Epilogue".to_string(), 600_000, 900_000),
     ];
 
-    let merged = merge_chapter_lists(&[part1_chapters, part2_chapters]);
+    let merged = merge_chapter_lists(&[part1_chapters, part2_chapters], &[900_000, 900_000]);
 
     assert_eq!(merged.len(), 4);
 
@@ -112,7 +112,7 @@ fn test_merge_synthesized_one_chapter_per_file() {
     let file2 = vec![Chapter::new(1, "002 Troy".to_string(), 0, 400_000)];
     let file3 = vec![Chapter::new(1, "003 Troy".to_string(), 0, 600_000)];
 
-    let merged = merge_chapter_lists(&[file1, file2, file3]);
+    let merged = merge_chapter_lists(&[file1, file2, file3], &[500_000, 400_000, 600_000]);
 
     assert_eq!(merged.len(), 3);
 
