@@ -54,6 +54,7 @@ impl M4bMerger {
         )
         .await
         .context("Failed to inspect source M4B audio streams")?;
+        Self::validate_copy_compatibility(&source_profiles)?;
 
         // Create temp directory
         let temp_dir = self.create_temp_dir(&book_folder.name)?;
@@ -110,45 +111,14 @@ impl M4bMerger {
 
         // Step 2: Create concat file for FFmpeg
         let concat_file = temp_dir.join("concat.txt");
-        let requires_normalization = Self::requires_normalization(&source_profiles);
-        let concat_inputs = if requires_normalization {
-            let target_profile = Self::normalization_profile(&source_profiles);
-            tracing::warn!(
-                "M4B stream formats differ; normalizing all parts to {} before concatenation. Temporary disk usage may approach the total source size",
-                target_profile
-            );
-
-            let mut normalized = Vec::with_capacity(m4b_files.len());
-            for (index, source) in m4b_files.iter().enumerate() {
-                let output = temp_dir.join(format!("normalized-{index:04}.m4a"));
-                self.ffmpeg
-                    .convert_single_file(
-                        source,
-                        &output,
-                        &target_profile,
-                        false,
-                        crate::audio::get_encoder(),
-                    )
-                    .await
-                    .with_context(|| format!("Failed to normalize {}", source.display()))?;
-                normalized.push(output);
-            }
-            normalized
-        } else {
-            m4b_files.clone()
-        };
-        let file_refs: Vec<&Path> = concat_inputs.iter().map(|p| p.as_path()).collect();
+        let file_refs: Vec<&Path> = m4b_files.iter().map(|p| p.as_path()).collect();
         FFmpeg::create_concat_file(&file_refs, &concat_file)?;
 
         // Step 3: Concatenate audio losslessly
         let output_filename = book_folder.get_output_filename();
         let output_path = output_dir.join(&output_filename);
 
-        if requires_normalization {
-            tracing::info!("Concatenating normalized audio streams...");
-        } else {
-            tracing::info!("Concatenating audio (lossless copy mode)...");
-        }
+        tracing::info!("Concatenating audio (lossless copy mode)...");
 
         self.ffmpeg
             .concat_m4b_files(&concat_file, &output_path)
@@ -183,18 +153,37 @@ impl M4bMerger {
         Ok(output_path)
     }
 
-    /// Whether source streams must be normalized before FFmpeg concat demuxing.
+    /// Reject streams that cannot be safely passed to FFmpeg copy-concat.
     /// The concat demuxer accepts incompatible streams without an error, which
     /// can produce an M4B with incorrect timing or channel parameters.
-    fn requires_normalization(profiles: &[QualityProfile]) -> bool {
+    fn validate_copy_compatibility(profiles: &[QualityProfile]) -> Result<()> {
         let Some(first) = profiles.first() else {
-            return false;
+            anyhow::bail!("No M4B audio streams were found to concatenate");
         };
 
-        !matches!(first.codec.to_lowercase().as_str(), "aac" | "alac")
-            || profiles[1..]
-                .iter()
-                .any(|profile| !Self::is_copy_compatible(first, profile))
+        if !matches!(first.codec.to_lowercase().as_str(), "aac" | "alac") {
+            anyhow::bail!(
+                "M4B stream codec '{}' cannot be concatenated losslessly; normalize the source files first",
+                first.codec
+            );
+        }
+
+        if let Some(incompatible) = profiles[1..]
+            .iter()
+            .find(|profile| !Self::is_copy_compatible(first, profile))
+        {
+            anyhow::bail!(
+                "M4B audio streams are incompatible for lossless concatenation (first: {} Hz/{} ch/{}, incompatible: {} Hz/{} ch/{}); normalize the source files first",
+                first.sample_rate,
+                first.channels,
+                first.codec,
+                incompatible.sample_rate,
+                incompatible.channels,
+                incompatible.codec
+            );
+        }
+
+        Ok(())
     }
 
     /// FFmpeg copy-concat requires stable stream structure, but measured average
@@ -203,18 +192,6 @@ impl M4bMerger {
         first.sample_rate == other.sample_rate
             && first.channels == other.channels
             && first.codec.eq_ignore_ascii_case(&other.codec)
-    }
-
-    /// Choose one concat-compatible AAC profile that does not lower a source
-    /// stream's bitrate, sample rate, or channel count.
-    fn normalization_profile(profiles: &[QualityProfile]) -> QualityProfile {
-        QualityProfile {
-            bitrate: profiles.iter().map(|p| p.bitrate).max().unwrap_or(128).max(128),
-            sample_rate: profiles.iter().map(|p| p.sample_rate).max().unwrap_or(44_100),
-            channels: profiles.iter().map(|p| p.channels).max().unwrap_or(2),
-            codec: "aac".to_string(),
-            duration: 0.0,
-        }
     }
 
     /// Synthesize a single chapter spanning the full duration of a source file.
@@ -303,14 +280,11 @@ mod tests {
     use crate::models::QualityProfile;
 
     #[test]
-    fn incompatible_streams_require_normalization_before_concat() {
+    fn incompatible_streams_are_rejected_before_concat() {
         let mono_44khz = QualityProfile::new(64, 44_100, 1, "aac".to_string(), 1.0).unwrap();
         let stereo_48khz = QualityProfile::new(128, 48_000, 2, "aac".to_string(), 1.0).unwrap();
 
-        assert!(M4bMerger::requires_normalization(&[
-            mono_44khz,
-            stereo_48khz,
-        ]));
+        assert!(M4bMerger::validate_copy_compatibility(&[mono_44khz, stereo_48khz]).is_err());
     }
 
     #[test]
@@ -318,7 +292,7 @@ mod tests {
         let part1 = QualityProfile::new(62, 48_000, 2, "aac".to_string(), 1.0).unwrap();
         let part2 = QualityProfile::new(63, 48_000, 2, "aac".to_string(), 1.0).unwrap();
 
-        assert!(!M4bMerger::requires_normalization(&[part1, part2]));
+        assert!(M4bMerger::validate_copy_compatibility(&[part1, part2]).is_ok());
     }
 
     #[test]
@@ -326,6 +300,6 @@ mod tests {
         let part1 = QualityProfile::new(256, 48_000, 6, "aac".to_string(), 1.0).unwrap();
         let part2 = QualityProfile::new(255, 48_000, 6, "aac".to_string(), 1.0).unwrap();
 
-        assert!(!M4bMerger::requires_normalization(&[part1, part2]));
+        assert!(M4bMerger::validate_copy_compatibility(&[part1, part2]).is_ok());
     }
 }
