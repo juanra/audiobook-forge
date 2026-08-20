@@ -2,7 +2,7 @@
 
 use crate::audio::{read_m4b_chapters, merge_chapter_lists, Chapter, FFmpeg};
 use crate::audio::{write_mp4box_chapters, inject_chapters_mp4box, inject_metadata_atomicparsley};
-use crate::models::BookFolder;
+use crate::models::{BookFolder, QualityProfile};
 use crate::utils::sort_by_part_number;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -46,6 +46,14 @@ impl M4bMerger {
             m4b_files.len(),
             book_folder.name
         );
+
+        let source_profiles: Vec<QualityProfile> = futures::future::try_join_all(
+            m4b_files
+                .iter()
+                .map(|file| self.ffmpeg.probe_audio_file(file)),
+        )
+        .await
+        .context("Failed to inspect source M4B audio streams")?;
 
         // Create temp directory
         let temp_dir = self.create_temp_dir(&book_folder.name)?;
@@ -102,7 +110,33 @@ impl M4bMerger {
 
         // Step 2: Create concat file for FFmpeg
         let concat_file = temp_dir.join("concat.txt");
-        let file_refs: Vec<&Path> = m4b_files.iter().map(|p| p.as_path()).collect();
+        let concat_inputs = if Self::requires_normalization(&source_profiles) {
+            let target_profile = Self::normalization_profile(&source_profiles);
+            tracing::warn!(
+                "M4B streams differ; normalizing all parts to {} before concatenation",
+                target_profile
+            );
+
+            let mut normalized = Vec::with_capacity(m4b_files.len());
+            for (index, source) in m4b_files.iter().enumerate() {
+                let output = temp_dir.join(format!("normalized-{index:04}.m4a"));
+                self.ffmpeg
+                    .convert_single_file(
+                        source,
+                        &output,
+                        &target_profile,
+                        false,
+                        crate::audio::get_encoder(),
+                    )
+                    .await
+                    .with_context(|| format!("Failed to normalize {}", source.display()))?;
+                normalized.push(output);
+            }
+            normalized
+        } else {
+            m4b_files.clone()
+        };
+        let file_refs: Vec<&Path> = concat_inputs.iter().map(|p| p.as_path()).collect();
         FFmpeg::create_concat_file(&file_refs, &concat_file)?;
 
         // Step 3: Concatenate audio losslessly
@@ -142,6 +176,32 @@ impl M4bMerger {
         tracing::info!("M4B merge complete: {}", output_path.display());
 
         Ok(output_path)
+    }
+
+    /// Whether source streams must be normalized before FFmpeg concat demuxing.
+    /// The concat demuxer accepts incompatible streams without an error, which
+    /// can produce an M4B with incorrect timing or channel parameters.
+    fn requires_normalization(profiles: &[QualityProfile]) -> bool {
+        let Some(first) = profiles.first() else {
+            return false;
+        };
+
+        !matches!(first.codec.to_lowercase().as_str(), "aac" | "alac")
+            || profiles[1..]
+                .iter()
+                .any(|profile| !first.is_compatible_for_concat(profile))
+    }
+
+    /// Choose one lossless-concat-compatible AAC profile that does not lower a
+    /// source stream's bitrate, sample rate, or channel count.
+    fn normalization_profile(profiles: &[QualityProfile]) -> QualityProfile {
+        QualityProfile {
+            bitrate: profiles.iter().map(|p| p.bitrate).max().unwrap_or(128).max(128),
+            sample_rate: profiles.iter().map(|p| p.sample_rate).max().unwrap_or(44_100),
+            channels: profiles.iter().map(|p| p.channels).max().unwrap_or(2),
+            codec: "aac".to_string(),
+            duration: 0.0,
+        }
     }
 
     /// Synthesize a single chapter spanning the full duration of a source file.
