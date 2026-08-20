@@ -13,7 +13,7 @@ pub fn natural_sort<P: AsRef<Path>>(paths: &mut [P]) {
 }
 
 /// Compare two paths using natural ordering
-fn natural_compare(a: &Path, b: &Path) -> Ordering {
+pub(crate) fn natural_compare(a: &Path, b: &Path) -> Ordering {
     let a_str = a.to_string_lossy();
     let b_str = b.to_string_lossy();
 

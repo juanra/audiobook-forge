@@ -68,12 +68,7 @@ impl Analyzer {
 
         // `buffer_unordered` completes probes out of order. Restore the scanner's
         // natural order so tracks such as 1, 2, 10 are not emitted as 1, 10, 2.
-        tracks.sort_by(|a, b| {
-            natord::compare(
-                &a.file_path.to_string_lossy(),
-                &b.file_path.to_string_lossy(),
-            )
-        });
+        tracks.sort_by(|a, b| crate::utils::natural_compare(&a.file_path, &b.file_path));
 
         book_folder.tracks = tracks;
 
@@ -101,8 +96,10 @@ impl Default for Analyzer {
 mod tests {
     use super::*;
     use crate::models::QualityProfile;
+    #[cfg(unix)]
     use std::fs;
     use std::path::PathBuf;
+    #[cfg(unix)]
     use tempfile::TempDir;
 
     #[test]
@@ -145,20 +142,18 @@ mod tests {
         assert!(!analyzer.can_use_copy_mode(&book));
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn analyzed_tracks_keep_the_scanner_natural_order() {
         let temp_dir = TempDir::new().unwrap();
         let probe = temp_dir.path().join("ffprobe");
         fs::write(
             &probe,
-            "#!/bin/sh\necho '{\"streams\":[{\"codec_type\":\"audio\",\"codec_name\":\"mp3\",\"sample_rate\":\"44100\",\"channels\":2,\"bit_rate\":\"128000\",\"duration\":\"1.0\"}],\"format\":{\"bit_rate\":\"128000\",\"duration\":\"1.0\"}}'\n",
+            "#!/bin/sh\ncase \"$*\" in *track1.mp3*) sleep 1 ;; esac\necho '{\"streams\":[{\"codec_type\":\"audio\",\"codec_name\":\"mp3\",\"sample_rate\":\"44100\",\"channels\":2,\"bit_rate\":\"128000\",\"duration\":\"1.0\"}],\"format\":{\"bit_rate\":\"128000\",\"duration\":\"1.0\"}}'\n",
         )
         .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&probe, fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&probe, fs::Permissions::from_mode(0o755)).unwrap();
 
         let mut book = BookFolder::new(temp_dir.path().join("Book"));
         book.mp3_files = vec![
