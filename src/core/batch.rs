@@ -36,7 +36,7 @@ impl BatchProcessor {
             keep_temp: false,
             encoder: crate::audio::get_encoder(),
             enable_parallel_encoding: true,
-            max_concurrent_encodes: 2, // Default: 2 concurrent encodes
+            max_concurrent_encodes: 2.min(workers.clamp(1, 16)), // Default: 2 concurrent encodes
             max_concurrent_files: 8, // Default: 8 concurrent files per book
             quality_preset: None,
             retry_config: RetryConfig::new(),
@@ -54,12 +54,16 @@ impl BatchProcessor {
         quality_preset: Option<String>,
         retry_config: RetryConfig,
     ) -> Self {
+        let workers = workers.clamp(1, 16);
         Self {
-            workers: workers.clamp(1, 16),
+            workers,
             keep_temp,
             encoder,
             enable_parallel_encoding,
-            max_concurrent_encodes: max_concurrent_encodes.clamp(1, 16),
+            // `workers` is the user-facing batch concurrency setting. The
+            // encoding cap may lower it further, but must never let `-j` be
+            // exceeded.
+            max_concurrent_encodes: max_concurrent_encodes.clamp(1, 16).min(workers),
             max_concurrent_files: max_concurrent_files.clamp(1, 32),
             quality_preset,
             retry_config,
@@ -253,7 +257,23 @@ mod tests {
         assert_eq!(processor.max_concurrent_encodes, 1);
 
         let processor = BatchProcessor::with_options(4, false, AacEncoder::Native, true, 100, 8, None, RetryConfig::new());
-        assert_eq!(processor.max_concurrent_encodes, 16);
+        assert_eq!(processor.max_concurrent_encodes, 4);
+    }
+
+    #[test]
+    fn test_worker_count_limits_batch_encodes() {
+        let processor = BatchProcessor::with_options(
+            1,
+            false,
+            AacEncoder::Native,
+            true,
+            8,
+            8,
+            None,
+            RetryConfig::new(),
+        );
+
+        assert_eq!(processor.max_concurrent_encodes, 1);
     }
 
     #[test]
