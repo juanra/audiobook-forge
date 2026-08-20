@@ -223,3 +223,20 @@ impl Default for M4bMerger {
         Self::new().expect("Failed to create M4B merger")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::QualityProfile;
+
+    #[test]
+    fn incompatible_streams_require_normalization_before_concat() {
+        let mono_44khz = QualityProfile::new(64, 44_100, 1, "aac".to_string(), 1.0).unwrap();
+        let stereo_48khz = QualityProfile::new(128, 48_000, 2, "aac".to_string(), 1.0).unwrap();
+
+        assert!(M4bMerger::requires_normalization(&[
+            mono_44khz,
+            stereo_48khz,
+        ]));
+    }
+}
