@@ -2,7 +2,7 @@
 
 use crate::cli::commands::{BuildArgs, ConfigCommands, OrganizeArgs, MetadataCommands, MatchArgs};
 use crate::core::{Analyzer, BatchProcessor, M4bMerger, Organizer, RetryConfig, Scanner};
-use crate::models::{BookCase, Config, AudibleRegion, CurrentMetadata, MetadataSource};
+use crate::models::{BookCase, Config, AudibleRegion, CurrentMetadata, MetadataSource, ProcessingResult};
 use crate::utils::{ConfigManager, DependencyChecker, AudibleCache, scoring, extraction};
 use crate::audio::{AacEncoder, AudibleClient, detect_asin};
 use crate::ui::{prompt_match_selection, prompt_manual_metadata, prompt_custom_search, UserChoice};
@@ -469,6 +469,9 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
         .into_iter()
         .partition(|b| b.case == BookCase::E);
 
+    // Outcomes of the M4B merge path, folded into the batch tally below.
+    let mut merge_results: Vec<ProcessingResult> = Vec::new();
+
     // Process M4B merges
     if !merge_books.is_empty() {
         println!(
@@ -487,12 +490,23 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                 book.m4b_files.len()
             );
 
+            let started = std::time::Instant::now();
+            let elapsed = |t: std::time::Instant| t.elapsed().as_secs_f64();
+
+            // Merges are recorded as ProcessingResults so they are counted in the
+            // final batch tally. Previously this loop only printed, so a run made
+            // up entirely of merges reported "0 successful, 0 failed" (issue #31).
             match merger.merge_m4b_files(&book, &output_dir).await {
                 Ok(output_path) => {
                     println!(
                         "  {} Merged: {}",
                         style("✓").green(),
                         output_path.display()
+                    );
+                    // Merging is a lossless concat, hence copy mode.
+                    merge_results.push(
+                        ProcessingResult::new(book.name.clone())
+                            .success(output_path, elapsed(started), true),
                     );
                 }
                 Err(e) => {
@@ -504,6 +518,10 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                         style("✗").red(),
                         book.name,
                         e
+                    );
+                    merge_results.push(
+                        ProcessingResult::new(book.name.clone())
+                            .failure(format!("{:#}", e), elapsed(started)),
                     );
                 }
             }
@@ -526,15 +544,32 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
         )
         .await;
 
+    // Merge outcomes are part of the same batch, but the merge loop above already
+    // printed a line for each, so keep them separate for printing and combine only
+    // for the tally.
+    let conversion_results = results;
+
     // Print results
     println!();
-    let successful = results.iter().filter(|r| r.success).count();
-    let failed = results.len() - successful;
+    let successful = merge_results
+        .iter()
+        .chain(conversion_results.iter())
+        .filter(|r| r.success)
+        .count();
+    let failed = merge_results.len() + conversion_results.len() - successful;
 
-    for result in &results {
+    for result in &conversion_results {
         if result.success {
+            let skipped_note = if result.skipped_tracks > 0 {
+                format!(
+                    ", {}",
+                    style(format!("{} track(s) skipped", result.skipped_tracks)).yellow()
+                )
+            } else {
+                String::new()
+            };
             println!(
-                "  {} {} ({:.1}s, {})",
+                "  {} {} ({:.1}s, {}{})",
                 style("✓").green(),
                 style(&result.book_name).yellow(),
                 result.processing_time,
@@ -542,7 +577,8 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
                     "copy mode"
                 } else {
                     "transcode"
-                }
+                },
+                skipped_note
             );
         } else {
             println!(

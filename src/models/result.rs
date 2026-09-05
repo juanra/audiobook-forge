@@ -20,6 +20,8 @@ pub struct ProcessingResult {
     pub output_size: Option<u64>,
     /// Whether copy mode was used (no re-encoding)
     pub used_copy_mode: bool,
+    /// Number of source tracks skipped because they could not be analyzed
+    pub skipped_tracks: usize,
 }
 
 impl ProcessingResult {
@@ -33,6 +35,7 @@ impl ProcessingResult {
             error_message: None,
             output_size: None,
             used_copy_mode: false,
+            skipped_tracks: 0,
         }
     }
 
