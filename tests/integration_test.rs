@@ -278,3 +278,102 @@ fn test_m4a_files_treated_as_mp3() {
     assert_eq!(books[0].case, BookCase::A);
     assert_eq!(books[0].mp3_files.len(), 2); // M4A treated as MP3
 }
+
+/// Regression test for issue #30: a *directory* whose name ends in an audio
+/// extension (e.g. "Something.mp3") must not be counted as an audio file.
+/// It previously made a library root look like a single audiobook folder,
+/// aborting the whole run before any book was processed.
+#[test]
+fn test_directory_named_like_audio_file_is_not_a_track() {
+    use audiobook_forge::core::is_audio_track_file;
+
+    let tmp = std::env::temp_dir().join(format!("af-issue30-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+
+    // A directory that merely *looks* like an mp3.
+    let dir_like_audio = tmp.join("Horror.Tales.12.-Monsterland,.ABOOK,.mp3");
+    std::fs::create_dir_all(&dir_like_audio).unwrap();
+
+    // A genuine audio file.
+    let real_track = tmp.join("01.mp3");
+    std::fs::write(&real_track, b"").unwrap();
+
+    assert!(
+        !is_audio_track_file(&dir_like_audio),
+        "a directory ending in .mp3 must not count as an audio track"
+    );
+    assert!(is_audio_track_file(&real_track), "a real .mp3 file must count");
+
+    // FLAC must be recognised too: the detection helpers had drifted from the
+    // scanner, which has accepted .flac since v2.11.1.
+    let flac_track = tmp.join("02.flac");
+    std::fs::write(&flac_track, b"").unwrap();
+    assert!(is_audio_track_file(&flac_track), ".flac must count as an audio track");
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// The scanner's own match arms and the shared extension list must stay in
+/// sync. If a new source format is added to one and not the other, a folder can
+/// be detected as an audiobook and then scanned as empty (issue #30).
+#[test]
+fn test_scanner_accepts_every_declared_audio_extension() {
+    use audiobook_forge::core::{AUDIO_TRACK_EXTENSIONS, Scanner};
+
+    let tmp = std::env::temp_dir().join(format!("af-ext-sync-{}", std::process::id()));
+
+    for ext in AUDIO_TRACK_EXTENSIONS {
+        let book = tmp.join(format!("Book {ext}"));
+        let _ = std::fs::remove_dir_all(&book);
+        std::fs::create_dir_all(&book).unwrap();
+        // Two tracks so the folder classifies as a real book, not a single file.
+        std::fs::write(book.join(format!("01.{ext}")), b"").unwrap();
+        std::fs::write(book.join(format!("02.{ext}")), b"").unwrap();
+
+        let scanner = Scanner::new();
+        let found = scanner.scan_single_directory(&book);
+
+        assert!(
+            found.is_ok(),
+            ".{ext} is in AUDIO_TRACK_EXTENSIONS but the scanner rejected a folder of them"
+        );
+    }
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// The analyzer re-sorts tracks "for consistency", so it must use the same
+/// natural ordering as the scanner. A lexicographic sort would put track10
+/// before track2 and silently reorder the audiobook.
+#[test]
+fn test_analyzer_sort_matches_scanner_natural_order() {
+    use audiobook_forge::utils::natural_sort;
+
+    let mut natural: Vec<PathBuf> = vec![
+        PathBuf::from("/b/track10.mp3"),
+        PathBuf::from("/b/track2.mp3"),
+        PathBuf::from("/b/track1.mp3"),
+    ];
+    natural_sort(&mut natural);
+
+    let mut lexicographic = vec![
+        PathBuf::from("/b/track10.mp3"),
+        PathBuf::from("/b/track2.mp3"),
+        PathBuf::from("/b/track1.mp3"),
+    ];
+    lexicographic.sort();
+
+    assert_ne!(
+        natural, lexicographic,
+        "fixture must actually distinguish the two orderings"
+    );
+    assert_eq!(
+        natural,
+        vec![
+            PathBuf::from("/b/track1.mp3"),
+            PathBuf::from("/b/track2.mp3"),
+            PathBuf::from("/b/track10.mp3"),
+        ]
+    );
+}

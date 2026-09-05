@@ -1,7 +1,7 @@
 //! CLI command handlers
 
 use crate::cli::commands::{BuildArgs, ConfigCommands, OrganizeArgs, MetadataCommands, MatchArgs};
-use crate::core::{Analyzer, BatchProcessor, M4bMerger, Organizer, RetryConfig, Scanner};
+use crate::core::{Analyzer, BatchProcessor, M4bMerger, Organizer, RetryConfig, Scanner, is_audio_track_file};
 use crate::models::{BookCase, Config, AudibleRegion, CurrentMetadata, MetadataSource, ProcessingResult};
 use crate::utils::{ConfigManager, DependencyChecker, AudibleCache, scoring, extraction};
 use crate::audio::{AacEncoder, AudibleClient, detect_asin};
@@ -74,13 +74,7 @@ fn try_detect_current_as_audiobook() -> Result<Option<PathBuf>> {
 
     let mp3_count = entries
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .map(|ext| ext.eq_ignore_ascii_case("mp3") || ext.eq_ignore_ascii_case("m4a"))
-                .unwrap_or(false)
-        })
+        .filter(|e| is_audio_track_file(&e.path()))
         .count();
 
     // Require at least 1 MP3 file to consider it an audiobook (BookCase A or B)
@@ -102,17 +96,7 @@ fn is_audiobook_folder(path: &std::path::Path) -> Result<bool> {
 
     let audio_count = entries
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .map(|ext| {
-                    ext.eq_ignore_ascii_case("mp3") ||
-                    ext.eq_ignore_ascii_case("m4a") ||
-                    ext.eq_ignore_ascii_case("m4b")
-                })
-                .unwrap_or(false)
-        })
+        .filter(|e| is_audio_track_file(&e.path()))
         .count();
 
     Ok(audio_count >= 1)

@@ -15,7 +15,7 @@ mod retry;
 mod organizer;
 mod m4b_merger;
 
-pub use scanner::Scanner;
+pub use scanner::{Scanner, is_audio_track_file, AUDIO_TRACK_EXTENSIONS};
 pub use analyzer::Analyzer;
 pub use processor::Processor;
 pub use batch::BatchProcessor;

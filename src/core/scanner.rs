@@ -5,6 +5,30 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use walkdir::WalkDir;
 
+/// Audio file extensions accepted as audiobook source tracks.
+///
+/// Single source of truth: the library-vs-single-folder detection helpers in
+/// the CLI and the scanner itself must agree, or a folder can be classified as
+/// an audiobook and then found to contain nothing (issue #30).
+pub const AUDIO_TRACK_EXTENSIONS: &[&str] = &["mp3", "m4a", "m4b", "flac"];
+
+/// Whether `path` is a real audio track file.
+///
+/// The `is_file()` check is load-bearing: a *directory* whose name ends in an
+/// audio extension (e.g. `Horror.Tales.mp3/`, as produced by some usenet
+/// downloaders) must not be mistaken for a track (issue #30).
+pub fn is_audio_track_file(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+
+    path.extension()
+        .and_then(|s| s.to_str())
+        .map(|ext| ext.to_lowercase())
+        .map(|ext| AUDIO_TRACK_EXTENSIONS.contains(&ext.as_str()))
+        .unwrap_or(false)
+}
+
 /// Scanner for discovering audiobook folders in a directory tree
 pub struct Scanner {
     /// Cover art filenames to search for
