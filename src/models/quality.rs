@@ -80,16 +80,45 @@ impl QualityProfile {
             && self.codec.to_lowercase() == other.codec.to_lowercase()
     }
 
-    /// Convert to AAC profile with equivalent or better quality
-    pub fn to_aac_equivalent(&self) -> QualityProfile {
-        // For MP3->AAC conversion, use same or higher bitrate
-        let aac_bitrate = self.bitrate.max(128); // Minimum AAC quality
+    /// Whether this profile describes a lossless codec.
+    ///
+    /// Lossless bitrates describe the *source* file's size, not a perceptual
+    /// quality target, so they must never be handed to a lossy encoder as-is.
+    pub fn is_lossless(&self) -> bool {
+        matches!(
+            self.codec.to_lowercase().as_str(),
+            "flac" | "alac" | "wav" | "pcm_s16le" | "pcm_s24le" | "ape" | "wavpack"
+        )
+    }
+
+    /// AAC target for a stereo lossless source, in kbps.
+    pub const LOSSLESS_AAC_TARGET_STEREO: u32 = 192;
+    /// AAC target for a mono lossless source, in kbps.
+    pub const LOSSLESS_AAC_TARGET_MONO: u32 = 128;
+
+    /// The bitrate this profile should actually be encoded at.
+    ///
+    /// Lossy sources keep their own bitrate (transcoding to a higher one only
+    /// wastes space). Lossless sources probe at 900-1000+ kbps, which AAC
+    /// cannot meaningfully use; mirroring that produced enormous output files
+    /// at a nonsensical bitrate (issue #18), so they are clamped to a sane
+    /// perceptual target instead.
+    pub fn to_encode_target(&self) -> QualityProfile {
+        let bitrate = if self.is_lossless() {
+            if self.channels == 1 {
+                Self::LOSSLESS_AAC_TARGET_MONO
+            } else {
+                Self::LOSSLESS_AAC_TARGET_STEREO
+            }
+        } else {
+            self.bitrate
+        };
 
         QualityProfile {
-            bitrate: aac_bitrate,
+            bitrate,
             sample_rate: self.sample_rate,
             channels: self.channels,
-            codec: "aac".to_string(),
+            codec: self.codec.clone(),
             duration: self.duration,
         }
     }
@@ -137,11 +166,16 @@ impl QualityProfile {
         }
     }
 
-    /// Apply quality preset override if specified
+    /// Resolve the profile to encode with, honouring an optional preset override.
+    ///
+    /// An explicit preset (`low`..`maximum`) is the user's decision and wins.
+    /// Every other path — no preset at all, or the `source` preset, which means
+    /// "auto-detect from the source" — falls through to [`Self::to_encode_target`],
+    /// so a lossless source is always clamped to a sane AAC bitrate (issue #18).
     pub fn apply_preset(&self, preset: Option<&str>) -> QualityProfile {
         preset
             .and_then(|p| Self::from_preset(p, self))
-            .unwrap_or_else(|| self.clone())
+            .unwrap_or_else(|| self.to_encode_target())
     }
 }
 
@@ -158,6 +192,57 @@ impl fmt::Display for QualityProfile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_lossless_source_is_clamped_to_sane_aac_target() {
+        // FLAC rips probe at ~900-1000 kbps. Mirroring that into the AAC encoder
+        // produces enormous files at a bitrate AAC cannot use (issue #18).
+        let flac = QualityProfile::new(920, 44100, 2, "flac".to_string(), 3600.0).unwrap();
+        let target = flac.to_encode_target();
+
+        assert_eq!(target.bitrate, 192, "stereo lossless should target 192k AAC");
+        assert_eq!(target.sample_rate, 44100, "sample rate must be preserved");
+        assert_eq!(target.channels, 2);
+    }
+
+    #[test]
+    fn test_mono_lossless_source_uses_lower_target() {
+        let flac = QualityProfile::new(460, 44100, 1, "flac".to_string(), 3600.0).unwrap();
+        assert_eq!(flac.to_encode_target().bitrate, 128);
+    }
+
+    #[test]
+    fn test_lossy_source_bitrate_is_preserved() {
+        // Lossy sources must keep their existing behaviour: no clamping.
+        let mp3 = QualityProfile::new(128, 44100, 2, "mp3".to_string(), 3600.0).unwrap();
+        assert_eq!(mp3.to_encode_target().bitrate, 128);
+
+        let mp3_high = QualityProfile::new(320, 44100, 2, "mp3".to_string(), 3600.0).unwrap();
+        assert_eq!(mp3_high.to_encode_target().bitrate, 320);
+    }
+
+    #[test]
+    fn test_source_preset_still_clamps_lossless() {
+        // "source" is a documented --quality value meaning "auto-detect from the
+        // source". It must still clamp a lossless bitrate, or it reintroduces the
+        // enormous-output bug of issue #18.
+        let flac = QualityProfile::new(920, 44100, 2, "flac".to_string(), 3600.0).unwrap();
+        assert_eq!(flac.apply_preset(Some("source")).bitrate, 192);
+    }
+
+    #[test]
+    fn test_source_preset_preserves_lossy_bitrate() {
+        let mp3 = QualityProfile::new(320, 44100, 2, "mp3".to_string(), 3600.0).unwrap();
+        assert_eq!(mp3.apply_preset(Some("source")).bitrate, 320);
+    }
+
+    #[test]
+    fn test_explicit_preset_overrides_lossless_clamp() {
+        // An explicit preset is the user's decision and must win over the clamp.
+        let flac = QualityProfile::new(920, 44100, 2, "flac".to_string(), 3600.0).unwrap();
+        assert_eq!(flac.apply_preset(Some("low")).bitrate, 64);
+        assert_eq!(flac.apply_preset(Some("maximum")).bitrate, 256);
+    }
 
     #[test]
     fn test_quality_creation() {

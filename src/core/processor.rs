@@ -93,10 +93,21 @@ impl Processor {
             .context("No tracks found")?
             .clone();
 
-        // Apply quality preset override if specified
+        // Resolve the encode target. `apply_preset` honours an explicit preset and
+        // otherwise clamps lossless sources to a sane AAC bitrate (issue #18), so
+        // both the "no preset" and "--quality source" paths are covered here.
+        let source_bitrate = quality.bitrate;
+        let was_lossless = quality.is_lossless();
+        quality = quality.apply_preset(self.quality_preset.as_deref());
+
         if let Some(ref preset) = self.quality_preset {
-            quality = quality.apply_preset(Some(preset.as_str()));
             tracing::info!("Applying quality preset '{}': {}", preset, quality);
+        } else if was_lossless {
+            tracing::info!(
+                "Lossless source ({} kbps): encoding to {} kbps AAC",
+                source_bitrate,
+                quality.bitrate
+            );
         }
 
         if book_folder.tracks.len() == 1 {
@@ -320,7 +331,9 @@ impl Processor {
         );
 
         // Return success result
-        Ok(result.success(output_path, processing_time, use_copy))
+        let mut result = result.success(output_path, processing_time, use_copy);
+        result.skipped_tracks = book_folder.skipped_tracks;
+        Ok(result)
     }
 
     /// Generate chapters for the book
