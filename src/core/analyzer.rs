@@ -54,21 +54,51 @@ impl Analyzer {
             .collect::<Vec<_>>()
             .await;
 
-        // Collect successful tracks
+        // Collect successful tracks.
+        //
+        // A single unreadable track used to abort the entire run, so one bad file
+        // in the first book killed a 60-book batch (issue #18). Skip it with a
+        // warning instead, but fail loudly if nothing survives: silently emitting
+        // an audiobook with missing chapters would be worse than stopping.
         let mut tracks = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
         for result in results {
             match result {
                 Ok(track) => tracks.push(track),
                 Err(e) => {
-                    tracing::error!("Failed to analyze track: {}", e);
-                    return Err(e);
+                    tracing::warn!("Skipping unreadable track: {:#}", e);
+                    skipped.push(format!("{e:#}"));
                 }
             }
         }
 
-        // Sort tracks by filename (they should already be sorted from scanner)
-        // This is just to ensure consistency
-        tracks.sort_by(|a, b| a.file_path.cmp(&b.file_path));
+        // A Case E / Case C book carries its audio in `m4b_files`, so it has no
+        // mp3_files to analyze and legitimately yields zero tracks. Only treat an
+        // empty result as fatal when something actually failed.
+        if tracks.is_empty() && !skipped.is_empty() {
+            anyhow::bail!(
+                "No readable audio tracks in '{}' ({} file(s) failed). First error: {}",
+                book_folder.name,
+                skipped.len(),
+                skipped.first().map(String::as_str).unwrap_or("unknown")
+            );
+        }
+
+        book_folder.skipped_tracks = skipped.len();
+
+        if !skipped.is_empty() {
+            tracing::warn!(
+                "{}: skipped {} unreadable track(s) of {}",
+                book_folder.name,
+                skipped.len(),
+                skipped.len() + tracks.len()
+            );
+        }
+
+        // Sort tracks by filename (they should already be sorted from scanner).
+        // Must use the same natural ordering as the scanner: a plain lexicographic
+        // sort would place track10 before track2 and silently reorder the book.
+        crate::utils::natural_sort_by(&mut tracks, |t| t.file_path.as_path());
 
         book_folder.tracks = tracks;
 

@@ -377,3 +377,33 @@ fn test_analyzer_sort_matches_scanner_natural_order() {
         ]
     );
 }
+
+/// A merge-only (Case E) book carries its audio in `m4b_files` and has no MP3
+/// tracks to analyze. Analyzing it must succeed with zero tracks rather than
+/// being reported as "no readable audio tracks", which would block the merge.
+#[tokio::test]
+async fn test_analyzing_m4b_only_book_is_not_an_error() {
+    use audiobook_forge::core::Analyzer;
+    use audiobook_forge::models::BookFolder;
+
+    let tmp = std::env::temp_dir().join(format!("af-m4b-only-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+
+    let mut book = BookFolder::new(tmp.clone());
+    book.name = "Merge Only".to_string();
+    // No mp3_files: everything lives in m4b_files, as for a Case E book.
+    book.m4b_files = vec![tmp.join("001 Part.m4b"), tmp.join("002 Part.m4b")];
+
+    let analyzer = Analyzer::with_workers(1).unwrap();
+    let result = analyzer.analyze_book_folder(&mut book).await;
+
+    assert!(
+        result.is_ok(),
+        "an M4B-only book must analyze cleanly, got: {:?}",
+        result.err()
+    );
+    assert!(book.tracks.is_empty());
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}

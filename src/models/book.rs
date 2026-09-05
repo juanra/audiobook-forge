@@ -53,6 +53,8 @@ pub struct BookFolder {
     pub mp3_files: Vec<PathBuf>,
     /// M4B files found
     pub m4b_files: Vec<PathBuf>,
+    /// Number of source tracks that could not be analyzed and were skipped
+    pub skipped_tracks: usize,
     /// Cover art file path
     pub cover_file: Option<PathBuf>,
     /// CUE file path (if present)
@@ -81,6 +83,7 @@ impl BookFolder {
             tracks: Vec::new(),
             mp3_files: Vec::new(),
             m4b_files: Vec::new(),
+            skipped_tracks: 0,
             cover_file: None,
             cue_file: None,
             audible_metadata: None,
