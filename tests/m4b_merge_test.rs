@@ -1,6 +1,6 @@
 //! Integration tests for M4B merge functionality
 
-use audiobook_forge::utils::{detect_merge_pattern, sort_by_part_number, MergePatternType};
+use audiobook_forge::utils::{detect_merge_pattern, natural_sort, MergePatternType};
 use audiobook_forge::audio::{merge_chapter_lists, Chapter};
 use std::path::{Path, PathBuf};
 
@@ -59,14 +59,14 @@ fn test_unrelated_files_no_pattern() {
 }
 
 #[test]
-fn test_sort_by_part_number() {
+fn test_sort_part_suffix_filenames() {
     let mut files = vec![
         PathBuf::from("Book Part 3.m4b"),
         PathBuf::from("Book Part 1.m4b"),
         PathBuf::from("Book Part 2.m4b"),
     ];
 
-    sort_by_part_number(&mut files);
+    natural_sort(&mut files);
 
     assert_eq!(
         files.iter().map(|p| p.file_name().unwrap().to_str().unwrap()).collect::<Vec<_>>(),
@@ -170,4 +170,89 @@ fn test_single_file_no_pattern() {
     let result = detect_merge_pattern(&files);
 
     assert!(!result.pattern_detected);
+}
+
+/// Regression test for issue #31: M4B files whose track number is a *prefix*
+/// (e.g. "001 Author (Year) Title.m4b") were left in raw `read_dir` order,
+/// because the old suffix-anchored regex matched nothing and every file
+/// collapsed to sort key 0, making the stable sort a silent no-op.
+#[test]
+fn test_sort_numeric_prefix_filenames() {
+    // Deliberately shuffled, mirroring the scrambled order from issue #31.
+    let mut files = vec![
+        PathBuf::from("/books/051 Stephen Fry (2020) Troy.m4b"),
+        PathBuf::from("/books/024 Stephen Fry (2020) Troy.m4b"),
+        PathBuf::from("/books/002 Stephen Fry (2020) Troy.m4b"),
+        PathBuf::from("/books/010 Stephen Fry (2020) Troy.m4b"),
+        PathBuf::from("/books/001 Stephen Fry (2020) Troy.m4b"),
+        PathBuf::from("/books/070 Stephen Fry (2020) Troy.m4b"),
+    ];
+
+    natural_sort(&mut files);
+
+    let names: Vec<&str> = files
+        .iter()
+        .map(|p| p.file_name().unwrap().to_str().unwrap())
+        .collect();
+
+    assert_eq!(
+        names,
+        vec![
+            "001 Stephen Fry (2020) Troy.m4b",
+            "002 Stephen Fry (2020) Troy.m4b",
+            "010 Stephen Fry (2020) Troy.m4b",
+            "024 Stephen Fry (2020) Troy.m4b",
+            "051 Stephen Fry (2020) Troy.m4b",
+            "070 Stephen Fry (2020) Troy.m4b",
+        ]
+    );
+}
+
+/// Natural ordering must not regress to lexicographic for unpadded numbers.
+#[test]
+fn test_sort_unpadded_numeric_prefix() {
+    let mut files = vec![
+        PathBuf::from("10 Chapter.m4b"),
+        PathBuf::from("2 Chapter.m4b"),
+        PathBuf::from("1 Chapter.m4b"),
+    ];
+
+    natural_sort(&mut files);
+
+    let names: Vec<&str> = files
+        .iter()
+        .map(|p| p.file_name().unwrap().to_str().unwrap())
+        .collect();
+
+    assert_eq!(names, vec!["1 Chapter.m4b", "2 Chapter.m4b", "10 Chapter.m4b"]);
+}
+
+/// End-to-end check for issue #31: the scanner must hand the merger files in
+/// playback order regardless of the order `read_dir` returns them in.
+#[test]
+fn test_scanner_orders_numeric_prefix_m4b_files() {
+    use audiobook_forge::core::Scanner;
+
+    let tmp = std::env::temp_dir().join(format!("af-issue31-{}", std::process::id()));
+    let book = tmp.join("03 - Troy");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&book).unwrap();
+
+    // Created in the scrambled order seen in the issue report.
+    for n in ["051", "024", "002", "010", "001", "070", "007"] {
+        std::fs::write(book.join(format!("{n} Stephen Fry (2020) Troy.m4b")), b"").unwrap();
+    }
+
+    let scanner = Scanner::new();
+    let found = scanner.scan_single_directory(&book).unwrap();
+
+    let order: Vec<String> = found
+        .m4b_files
+        .iter()
+        .map(|p| p.file_name().unwrap().to_str().unwrap()[..3].to_string())
+        .collect();
+
+    assert_eq!(order, vec!["001", "002", "007", "010", "024", "051", "070"]);
+
+    let _ = std::fs::remove_dir_all(&tmp);
 }

@@ -147,13 +147,11 @@ impl Scanner {
 
         // Only return if it's a valid audiobook folder (Cases A, B, C, or E)
         if matches!(book.case, BookCase::A | BookCase::B | BookCase::C | BookCase::E) {
-            // Sort MP3 files naturally
+            // Sort both track lists naturally. M4B files are sorted unconditionally:
+            // `--merge-m4b` can force a merge of a Case C folder too, and raw
+            // `read_dir` order is never the right playback order (issue #31).
             crate::utils::natural_sort(&mut book.mp3_files);
-
-            // Sort M4B files by part number for Case E
-            if book.case == BookCase::E {
-                crate::utils::sort_by_part_number(&mut book.m4b_files);
-            }
+            crate::utils::natural_sort(&mut book.m4b_files);
 
             // Auto-extract embedded cover art if enabled and no standalone cover found
             if self.auto_extract_cover && book.cover_file.is_none() {

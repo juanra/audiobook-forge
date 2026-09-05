@@ -129,27 +129,6 @@ fn check_pattern_match(files: &[&Path], regex: &Regex) -> Option<String> {
     Some(first_base.clone())
 }
 
-/// Sort files by their numeric part indicator
-pub fn sort_by_part_number(files: &mut [std::path::PathBuf]) {
-    lazy_static::lazy_static! {
-        static ref NUMBER_REGEX: Regex = Regex::new(
-            r"(?i)(?:part|pt\.?|disc|disk|cd)?\s*(\d+)\.m4b$"
-        ).unwrap();
-    }
-
-    files.sort_by(|a, b| {
-        let get_num = |p: &std::path::PathBuf| -> u32 {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .and_then(|s| NUMBER_REGEX.captures(s))
-                .and_then(|c| c.get(1))
-                .and_then(|m| m.as_str().parse().ok())
-                .unwrap_or(0)
-        };
-        get_num(a).cmp(&get_num(b))
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,17 +184,4 @@ mod tests {
         assert!(!result.pattern_detected);
     }
 
-    #[test]
-    fn test_sort_by_part_number() {
-        let mut files = vec![
-            std::path::PathBuf::from("Book Part 3.m4b"),
-            std::path::PathBuf::from("Book Part 1.m4b"),
-            std::path::PathBuf::from("Book Part 2.m4b"),
-        ];
-        sort_by_part_number(&mut files);
-        assert_eq!(
-            files.iter().map(|p| p.file_name().unwrap().to_str().unwrap()).collect::<Vec<_>>(),
-            vec!["Book Part 1.m4b", "Book Part 2.m4b", "Book Part 3.m4b"]
-        );
-    }
 }

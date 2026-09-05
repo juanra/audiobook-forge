@@ -20,6 +20,17 @@ fn natural_compare(a: &Path, b: &Path) -> Ordering {
     natord::compare(&a_str, &b_str)
 }
 
+/// Sort items by a path extracted from each, using natural ordering.
+///
+/// Lets callers that hold richer values (e.g. analyzed tracks) share the exact
+/// ordering used for bare paths, so the two can never disagree.
+pub fn natural_sort_by<T, F>(items: &mut [T], key: F)
+where
+    F: Fn(&T) -> &Path,
+{
+    items.sort_by(|a, b| natural_compare(key(a), key(b)));
+}
+
 /// Sort strings using natural ordering
 #[allow(dead_code)]  // Utility function for future use
 pub fn natural_sort_strings(strings: &mut [String]) {

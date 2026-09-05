@@ -10,9 +10,9 @@ pub mod extraction;
 
 pub use config::ConfigManager;
 pub use validation::DependencyChecker;
-pub use sorting::natural_sort;
+pub use sorting::{natural_sort, natural_sort_by};
 pub use cache::{AudibleCache, CacheStats};
-pub use merge_patterns::{detect_merge_pattern, sort_by_part_number, MergePatternResult, MergePatternType};
+pub use merge_patterns::{detect_merge_pattern, MergePatternResult, MergePatternType};
 
 // Re-export Config for convenience
 pub use crate::models::Config;

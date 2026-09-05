@@ -3,7 +3,6 @@
 use crate::audio::{read_m4b_chapters, merge_chapter_lists, Chapter, FFmpeg};
 use crate::audio::{write_mp4box_chapters, inject_chapters_mp4box, inject_metadata_atomicparsley};
 use crate::models::BookFolder;
-use crate::utils::sort_by_part_number;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -36,10 +35,10 @@ impl M4bMerger {
         book_folder: &BookFolder,
         output_dir: &Path,
     ) -> Result<PathBuf> {
-        let mut m4b_files = book_folder.m4b_files.clone();
-
-        // Sort files by part number
-        sort_by_part_number(&mut m4b_files);
+        // The scanner already ordered these naturally; re-sorting here would be a
+        // second source of truth for playback order, which is what allowed the
+        // ordering bug in issue #31 to hide.
+        let m4b_files = book_folder.m4b_files.clone();
 
         tracing::info!(
             "Merging {} M4B files for: {}",
