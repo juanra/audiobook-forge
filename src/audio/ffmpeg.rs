@@ -30,6 +30,25 @@ pub struct FFmpeg {
     ffprobe_path: String,
 }
 
+
+/// Read a numeric ffprobe field that may be encoded as a JSON string or number.
+///
+/// ffprobe emits most numeric fields as strings, but this varies across builds
+/// and output options; assuming strings caused spurious "No bitrate found"
+/// failures (issue #18).
+fn parse_u64_field(value: &Value) -> Option<u64> {
+    value
+        .as_u64()
+        .or_else(|| value.as_str().and_then(|s| s.trim().parse::<u64>().ok()))
+}
+
+/// Read a floating-point ffprobe field encoded as either a JSON string or number.
+fn parse_f64_field(value: &Value) -> Option<f64> {
+    value
+        .as_f64()
+        .or_else(|| value.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
+}
+
 impl FFmpeg {
     /// Create a new FFmpeg wrapper with default paths
     pub fn new() -> Result<Self> {
@@ -96,26 +115,33 @@ impl FFmpeg {
             .find(|s| s["codec_type"] == "audio")
             .context("No audio stream found")?;
 
-        // Extract bitrate
-        let bitrate = if let Some(bit_rate) = audio_stream["bit_rate"].as_str() {
-            bit_rate.parse::<u32>()? / 1000 // Convert to kbps
-        } else {
-            // Fallback to format bitrate
-            json["format"]["bit_rate"]
-                .as_str()
-                .context("No bitrate found")?
-                .parse::<u32>()? / 1000
-        };
+        // Extract bitrate. Lossless codecs (FLAC, ALAC, WAV) carry no bitrate in
+        // their stream headers, so ffprobe omits `bit_rate` on the audio stream
+        // and only libavformat's computed `format.bit_rate` is available. Fall
+        // back to it, and fail with a message that names the missing field
+        // rather than the bare "No bitrate found" (issue #18).
+        let bitrate_bps = parse_u64_field(&audio_stream["bit_rate"])
+            .or_else(|| parse_u64_field(&json["format"]["bit_rate"]))
+            .context(
+                "ffprobe reported no bit_rate on either the audio stream or the \
+                 container format. The file may be truncated or written without \
+                 duration metadata; re-encoding or remuxing it usually fixes this",
+            )?;
+
+        if bitrate_bps < 1000 {
+            anyhow::bail!(
+                "ffprobe reported an implausible bit_rate of {} bps",
+                bitrate_bps
+            );
+        }
+        let bitrate = (bitrate_bps / 1000) as u32; // Convert to kbps
 
         // Extract sample rate
-        let sample_rate = audio_stream["sample_rate"]
-            .as_str()
-            .context("No sample rate found")?
-            .parse::<u32>()?;
+        let sample_rate = parse_u64_field(&audio_stream["sample_rate"])
+            .context("No sample rate found")? as u32;
 
         // Extract channels
-        let channels = audio_stream["channels"]
-            .as_u64()
+        let channels = parse_u64_field(&audio_stream["channels"])
             .context("No channels found")? as u8;
 
         // Extract codec
@@ -125,14 +151,9 @@ impl FFmpeg {
             .to_string();
 
         // Extract duration
-        let duration = if let Some(dur) = audio_stream["duration"].as_str() {
-            dur.parse::<f64>()?
-        } else {
-            json["format"]["duration"]
-                .as_str()
-                .context("No duration found")?
-                .parse::<f64>()?
-        };
+        let duration = parse_f64_field(&audio_stream["duration"])
+            .or_else(|| parse_f64_field(&json["format"]["duration"]))
+            .context("No duration found")?;
 
         QualityProfile::new(bitrate, sample_rate, channels, codec, duration)
     }
@@ -478,5 +499,88 @@ mod tests {
         assert_eq!(profile.channels, 2);
         assert_eq!(profile.codec, "mp3");
         assert!((profile.duration - 3600.5).abs() < 0.1);
+    }
+
+    /// FLAC stores no bitrate in STREAMINFO, so ffprobe omits `bit_rate` on the
+    /// audio stream and only libavformat's computed `format.bit_rate` is present
+    /// (issue #18).
+    #[test]
+    fn test_parse_ffprobe_flac_stream_without_bitrate() {
+        let json_str = r#"{
+            "streams": [{
+                "codec_type": "audio",
+                "codec_name": "flac",
+                "sample_rate": "44100",
+                "channels": 2,
+                "duration": "1800.0"
+            }],
+            "format": {
+                "bit_rate": "920000",
+                "duration": "1800.0"
+            }
+        }"#;
+
+        let json: Value = serde_json::from_str(json_str).unwrap();
+        let ffmpeg = FFmpeg::new().unwrap();
+        let profile = ffmpeg.parse_ffprobe_output(&json).unwrap();
+
+        assert_eq!(profile.codec, "flac");
+        assert_eq!(profile.bitrate, 920);
+    }
+
+    /// Some ffprobe builds emit numeric JSON values rather than strings. The
+    /// parser must accept both rather than reporting "No bitrate found".
+    #[test]
+    fn test_parse_ffprobe_numeric_fields() {
+        let json_str = r#"{
+            "streams": [{
+                "codec_type": "audio",
+                "codec_name": "flac",
+                "sample_rate": 48000,
+                "channels": 2,
+                "bit_rate": 960000,
+                "duration": 1200.0
+            }],
+            "format": {
+                "bit_rate": 960000,
+                "duration": 1200.0
+            }
+        }"#;
+
+        let json: Value = serde_json::from_str(json_str).unwrap();
+        let ffmpeg = FFmpeg::new().unwrap();
+        let profile = ffmpeg.parse_ffprobe_output(&json).unwrap();
+
+        assert_eq!(profile.bitrate, 960);
+        assert_eq!(profile.sample_rate, 48000);
+        assert!((profile.duration - 1200.0).abs() < 0.1);
+    }
+
+    /// When neither the stream nor the format carries a bitrate, the error must
+    /// name the file and the missing field instead of the bare "No bitrate found"
+    /// that sent the reporter of #18 looking at his FLAC install.
+    #[test]
+    fn test_parse_ffprobe_missing_bitrate_has_actionable_error() {
+        let json_str = r#"{
+            "streams": [{
+                "codec_type": "audio",
+                "codec_name": "flac",
+                "sample_rate": "44100",
+                "channels": 2,
+                "duration": "1800.0"
+            }],
+            "format": {
+                "duration": "1800.0"
+            }
+        }"#;
+
+        let json: Value = serde_json::from_str(json_str).unwrap();
+        let ffmpeg = FFmpeg::new().unwrap();
+        let err = ffmpeg.parse_ffprobe_output(&json).unwrap_err().to_string();
+
+        assert!(
+            err.contains("bit_rate"),
+            "error should name the missing field, got: {err}"
+        );
     }
 }
