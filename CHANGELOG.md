@@ -5,6 +5,69 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.3] - 2026-09-07
+
+### Fixed
+- **M4B files merged in the wrong order** (#31): audiobooks whose track number is
+  a filename *prefix* (`001 Author (Year) Title.m4b`) were concatenated in raw
+  filesystem order, producing an audiobook that started partway through. The sort
+  key was extracted with a suffix-anchored regex that matched nothing on these
+  names, so every file collapsed to key `0` and the stable sort silently did
+  nothing. M4B files are now ordered with the same natural sort already used for
+  MP3 tracks, which handles prefixes, `Part`/`Disc`/`CD` suffixes, and unpadded
+  numbers alike. M4B files are also sorted for every book, not only for folders
+  matching a merge pattern: `--merge-m4b` can force a merge of any folder, and
+  `read_dir` order is never the correct playback order.
+- **Merge results missing from the batch summary** (#31): a run consisting only of
+  M4B merges reported `Batch complete: 0 successful, 0 failed` even when the merge
+  succeeded, because merges were printed but never recorded. Merge outcomes now
+  feed the same tally as conversions.
+- **Build aborted on a library containing a directory named like an audio file**
+  (#30): a subdirectory whose name ends in `.mp3`, `.m4a` or `.m4b` (as produced by
+  some usenet downloaders) made the library root look like a single audiobook, and
+  the run stopped with the misleading `Current directory does not contain valid
+  audiobook files` before any book was processed. The detection helpers counted
+  directory entries by extension without checking that they were files, while the
+  scanner did check — the two disagreed. Both now share one `is_audio_track_file`
+  helper and one extension list, so they cannot drift apart again. This also fixes
+  `.flac` folders not being recognised as single audiobooks.
+- **FLAC and other lossless sources failing with "No bitrate found"** (#18):
+  numeric ffprobe fields are now accepted whether they are reported as JSON strings
+  or numbers, and when no bitrate is available at all the error names the missing
+  field and suggests a remedy instead of sending users to check their FLAC install.
+- **M4B duration probe shared the FLAC bitrate defect** (#18): the duration
+  reader parsed `format.duration` as a JSON string only, the same assumption
+  that made FLAC sources fail, so a build reporting numeric fields would fail
+  when merging. Both readers now accept either shape.
+- **Analyzer re-sorted tracks lexicographically**: after analysis, tracks were
+  re-sorted with a plain path comparison, which places `track10` before `track2`
+  and could silently reorder a book the scanner had already ordered correctly. It
+  now uses the same natural ordering as the scanner.
+- **A single unreadable track aborted the whole batch** (#18): one bad file in the
+  first book stopped a 60-book run. Unreadable tracks are now skipped with a
+  warning; a book is only failed when none of its tracks can be read.
+
+### Changed
+- **Lossless sources no longer transcode at the source bitrate**: FLAC, ALAC and
+  WAV probe at 900-1000+ kbps, which was passed straight to the AAC encoder,
+  producing enormous output files at a bitrate AAC cannot meaningfully use.
+  Lossless sources now target 192 kbps AAC (stereo) or 128 kbps (mono) unless an
+  explicit `--quality` preset is given. Lossy sources keep their existing bitrate,
+  and `--quality source` (which means "auto-detect from the source") clamps too.
+- **Skipped tracks are reported in the batch summary**: a book that completed with
+  unreadable tracks now says so on its result line, instead of only in the log.
+
+### Internal
+- **The codebase is formatted with rustfmt.** This touched most files without
+  changing behaviour, so the formatting commit is listed in
+  `.git-blame-ignore-revs` and `git blame` skips it.
+
+### Contributors
+Thanks to the contributors who reported the bugs fixed in this release:
+- [@virtualistic](https://github.com/virtualistic) — reported the M4B merge ordering bug (#31)
+- [@christopherpross](https://github.com/christopherpross) — reported the library scan abort, with a precise reproduction (#30)
+- [@dkuester](https://github.com/dkuester) — reported the FLAC transcode failure (#18)
+
 ## [2.11.2] - 2026-07-09
 
 ### Fixed
