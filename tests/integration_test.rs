@@ -303,13 +303,19 @@ fn test_directory_named_like_audio_file_is_not_a_track() {
         !is_audio_track_file(&dir_like_audio),
         "a directory ending in .mp3 must not count as an audio track"
     );
-    assert!(is_audio_track_file(&real_track), "a real .mp3 file must count");
+    assert!(
+        is_audio_track_file(&real_track),
+        "a real .mp3 file must count"
+    );
 
     // FLAC must be recognised too: the detection helpers had drifted from the
     // scanner, which has accepted .flac since v2.11.1.
     let flac_track = tmp.join("02.flac");
     std::fs::write(&flac_track, b"").unwrap();
-    assert!(is_audio_track_file(&flac_track), ".flac must count as an audio track");
+    assert!(
+        is_audio_track_file(&flac_track),
+        ".flac must count as an audio track"
+    );
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
@@ -319,7 +325,7 @@ fn test_directory_named_like_audio_file_is_not_a_track() {
 /// be detected as an audiobook and then scanned as empty (issue #30).
 #[test]
 fn test_scanner_accepts_every_declared_audio_extension() {
-    use audiobook_forge::core::{AUDIO_TRACK_EXTENSIONS, Scanner};
+    use audiobook_forge::core::{Scanner, AUDIO_TRACK_EXTENSIONS};
 
     let tmp = std::env::temp_dir().join(format!("af-ext-sync-{}", std::process::id()));
 

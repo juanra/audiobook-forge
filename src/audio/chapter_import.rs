@@ -1,8 +1,8 @@
 //! Chapter import and merge strategies
 
+use crate::audio::Chapter;
 use anyhow::{Context, Result};
 use std::path::Path;
-use crate::audio::Chapter;
 
 /// Source of chapter data
 #[derive(Debug, Clone)]
@@ -72,8 +72,7 @@ pub enum TextFormat {
 
 /// Parse chapters from text file
 pub fn parse_text_chapters(path: &Path) -> Result<Vec<Chapter>> {
-    let content = std::fs::read_to_string(path)
-        .context("Failed to read chapter file")?;
+    let content = std::fs::read_to_string(path).context("Failed to read chapter file")?;
 
     // Auto-detect format
     let format = detect_text_format(&content);
@@ -194,7 +193,8 @@ fn parse_mp4box_format(content: &str) -> Result<Vec<Chapter>> {
     }
 
     let mut chapter_times: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
-    let mut chapter_names: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+    let mut chapter_names: std::collections::HashMap<u32, String> =
+        std::collections::HashMap::new();
 
     for line in content.lines() {
         if let Some(caps) = CHAPTER_REGEX.captures(line) {
@@ -247,10 +247,10 @@ fn parse_mp4box_format(content: &str) -> Result<Vec<Chapter>> {
 pub fn parse_epub_chapters(path: &Path) -> Result<Vec<Chapter>> {
     use epub::doc::EpubDoc;
 
-    let doc = EpubDoc::new(path)
-        .context("Failed to open EPUB file")?;
+    let doc = EpubDoc::new(path).context("Failed to open EPUB file")?;
 
-    let toc = doc.toc
+    let toc = doc
+        .toc
         .iter()
         .enumerate()
         .map(|(i, nav_point)| {
@@ -296,11 +296,7 @@ pub async fn read_m4b_chapters(m4b_path: &Path) -> Result<Vec<Chapter>> {
     }
 
     let output = Command::new("ffprobe")
-        .args([
-            "-v", "quiet",
-            "-print_format", "json",
-            "-show_chapters",
-        ])
+        .args(["-v", "quiet", "-print_format", "json", "-show_chapters"])
         .arg(m4b_path)
         .output()
         .await
@@ -310,11 +306,10 @@ pub async fn read_m4b_chapters(m4b_path: &Path) -> Result<Vec<Chapter>> {
         anyhow::bail!("ffprobe failed to read chapters from M4B file");
     }
 
-    let json_str = String::from_utf8(output.stdout)
-        .context("ffprobe output is not valid UTF-8")?;
+    let json_str = String::from_utf8(output.stdout).context("ffprobe output is not valid UTF-8")?;
 
-    let ffprobe_output: FfprobeOutput = serde_json::from_str(&json_str)
-        .context("Failed to parse ffprobe JSON output")?;
+    let ffprobe_output: FfprobeOutput =
+        serde_json::from_str(&json_str).context("Failed to parse ffprobe JSON output")?;
 
     let chapters: Vec<Chapter> = ffprobe_output
         .chapters
@@ -367,9 +362,7 @@ pub fn merge_chapters(
             merge_keep_timestamps(existing, new)
         }
 
-        ChapterMergeStrategy::KeepTimestamps => {
-            merge_keep_timestamps(existing, new)
-        }
+        ChapterMergeStrategy::KeepTimestamps => merge_keep_timestamps(existing, new),
 
         ChapterMergeStrategy::ReplaceAll => {
             // Simply return new chapters
@@ -466,9 +459,7 @@ mod tests {
             Chapter::new(2, "Chapter Two".to_string(), 1000, 2000),
         ];
 
-        let new_different = vec![
-            Chapter::new(1, "Chapter One".to_string(), 0, 1000),
-        ];
+        let new_different = vec![Chapter::new(1, "Chapter One".to_string(), 0, 1000)];
 
         let comp1 = ChapterComparison::new(&existing, &new_matching);
         assert!(comp1.matches);
@@ -495,7 +486,10 @@ mod tests {
     #[test]
     fn test_detect_timestamped_format() {
         let content = "00:00:00 Prologue\n00:05:30 Chapter 1";
-        assert!(matches!(detect_text_format(content), TextFormat::Timestamped));
+        assert!(matches!(
+            detect_text_format(content),
+            TextFormat::Timestamped
+        ));
     }
 
     #[test]
@@ -611,9 +605,7 @@ mod tests {
             Chapter::new(2, "Chapter 2".to_string(), 1000, 2000),
         ];
 
-        let new = vec![
-            Chapter::new(1, "Prologue".to_string(), 0, 0),
-        ];
+        let new = vec![Chapter::new(1, "Prologue".to_string(), 0, 0)];
 
         let result = merge_chapters(&existing, &new, ChapterMergeStrategy::SkipOnMismatch);
 
@@ -630,9 +622,7 @@ mod tests {
             Chapter::new(3, "Chapter 3".to_string(), 2000, 3000),
         ];
 
-        let new = vec![
-            Chapter::new(1, "Prologue".to_string(), 0, 0),
-        ];
+        let new = vec![Chapter::new(1, "Prologue".to_string(), 0, 0)];
 
         let merged = merge_chapters(&existing, &new, ChapterMergeStrategy::KeepTimestamps).unwrap();
 
@@ -681,7 +671,7 @@ mod tests {
         assert_eq!(merged[3].title, "Part2 Ch2");
         assert_eq!(merged[3].start_time_ms, 165_000);
         assert_eq!(merged[3].end_time_ms, 210_000); // 120_000 + 90_000
-        // Renumbered sequentially
+                                                    // Renumbered sequentially
         assert_eq!(merged[0].number, 1);
         assert_eq!(merged[1].number, 2);
         assert_eq!(merged[2].number, 3);

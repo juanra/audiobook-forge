@@ -1,6 +1,6 @@
 //! Folder organization for audiobooks
 
-use crate::models::{BookFolder, BookCase, Config};
+use crate::models::{BookCase, BookFolder, Config};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -125,11 +125,8 @@ impl Organizer {
         }
 
         // Determine destination path
-        let destination_path = target_folder.join(
-            source_path
-                .file_name()
-                .context("Invalid source path")?,
-        );
+        let destination_path =
+            target_folder.join(source_path.file_name().context("Invalid source path")?);
 
         // Handle naming conflicts
         let final_destination = self.resolve_naming_conflict(&destination_path)?;
@@ -144,19 +141,19 @@ impl Organizer {
         } else {
             // Create target folder if it doesn't exist
             if !target_folder.exists() {
-                fs::create_dir_all(&target_folder)
-                    .with_context(|| format!("Failed to create folder: {}", target_folder.display()))?;
+                fs::create_dir_all(&target_folder).with_context(|| {
+                    format!("Failed to create folder: {}", target_folder.display())
+                })?;
             }
 
             // Move the folder
-            fs::rename(&source_path, &final_destination)
-                .with_context(|| {
-                    format!(
-                        "Failed to move {} to {}",
-                        source_path.display(),
-                        final_destination.display()
-                    )
-                })?;
+            fs::rename(&source_path, &final_destination).with_context(|| {
+                format!(
+                    "Failed to move {} to {}",
+                    source_path.display(),
+                    final_destination.display()
+                )
+            })?;
 
             tracing::info!(
                 "Moved: {} -> {}",

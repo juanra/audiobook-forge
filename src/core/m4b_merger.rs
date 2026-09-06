@@ -1,7 +1,7 @@
 //! M4B file merger for lossless concatenation
 
-use crate::audio::{read_m4b_chapters, merge_chapter_lists, Chapter, FFmpeg};
-use crate::audio::{write_mp4box_chapters, inject_chapters_mp4box, inject_metadata_atomicparsley};
+use crate::audio::{inject_chapters_mp4box, inject_metadata_atomicparsley, write_mp4box_chapters};
+use crate::audio::{merge_chapter_lists, read_m4b_chapters, Chapter, FFmpeg};
 use crate::models::BookFolder;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -64,11 +64,7 @@ impl M4bMerger {
                     chapters
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        "Could not read chapters from {}: {}",
-                        m4b_file.display(),
-                        e
-                    );
+                    tracing::warn!("Could not read chapters from {}: {}", m4b_file.display(), e);
                     Vec::new()
                 }
             };
@@ -129,7 +125,8 @@ impl M4bMerger {
 
         // Step 5: Copy metadata from first file
         tracing::info!("Copying metadata from first source file...");
-        self.copy_metadata_from_first(&m4b_files[0], &output_path, book_folder).await?;
+        self.copy_metadata_from_first(&m4b_files[0], &output_path, book_folder)
+            .await?;
 
         // Clean up
         if !self.keep_temp {
@@ -150,8 +147,7 @@ impl M4bMerger {
     /// back to the filename stem. The chapter number is provisional — the caller's
     /// `merge_chapter_lists` renumbers chapters sequentially across all files.
     async fn synthesize_file_chapter(&self, m4b_file: &Path) -> Result<Chapter> {
-        let (duration_ms, embedded_title) =
-            self.ffmpeg.probe_duration_and_title(m4b_file).await?;
+        let (duration_ms, embedded_title) = self.ffmpeg.probe_duration_and_title(m4b_file).await?;
 
         let title = embedded_title.unwrap_or_else(|| {
             m4b_file

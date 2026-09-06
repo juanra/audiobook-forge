@@ -32,7 +32,7 @@ where
 }
 
 /// Sort strings using natural ordering
-#[allow(dead_code)]  // Utility function for future use
+#[allow(dead_code)] // Utility function for future use
 pub fn natural_sort_strings(strings: &mut [String]) {
     strings.sort_by(|a, b| natord::compare(a, b));
 }

@@ -94,10 +94,7 @@ impl DependencyChecker {
 
     /// Get FFmpeg version
     fn get_ffmpeg_version() -> Option<String> {
-        let output = Command::new("ffmpeg")
-            .arg("-version")
-            .output()
-            .ok()?;
+        let output = Command::new("ffmpeg").arg("-version").output().ok()?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         stdout
@@ -124,10 +121,7 @@ impl DependencyChecker {
 
     /// Get MP4Box version
     fn get_mp4box_version() -> Option<String> {
-        let output = Command::new("MP4Box")
-            .arg("-version")
-            .output()
-            .ok()?;
+        let output = Command::new("MP4Box").arg("-version").output().ok()?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         stdout
@@ -140,9 +134,7 @@ impl DependencyChecker {
     /// Check if Apple Silicon AAC encoder is available
     pub fn check_aac_at_support() -> bool {
         // Check if ffmpeg supports aac_at encoder
-        let output = Command::new("ffmpeg")
-            .args(&["-encoders"])
-            .output();
+        let output = Command::new("ffmpeg").args(&["-encoders"]).output();
 
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout);

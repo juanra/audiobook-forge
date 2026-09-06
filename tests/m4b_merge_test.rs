@@ -1,7 +1,7 @@
 //! Integration tests for M4B merge functionality
 
-use audiobook_forge::utils::{detect_merge_pattern, natural_sort, MergePatternType};
 use audiobook_forge::audio::{merge_chapter_lists, Chapter};
+use audiobook_forge::utils::{detect_merge_pattern, natural_sort, MergePatternType};
 use std::path::{Path, PathBuf};
 
 #[test]
@@ -48,10 +48,7 @@ fn test_numeric_suffix_detection() {
 
 #[test]
 fn test_unrelated_files_no_pattern() {
-    let files: Vec<&Path> = vec![
-        Path::new("Book One.m4b"),
-        Path::new("Different Book.m4b"),
-    ];
+    let files: Vec<&Path> = vec![Path::new("Book One.m4b"), Path::new("Different Book.m4b")];
 
     let result = detect_merge_pattern(&files);
 
@@ -69,7 +66,10 @@ fn test_sort_part_suffix_filenames() {
     natural_sort(&mut files);
 
     assert_eq!(
-        files.iter().map(|p| p.file_name().unwrap().to_str().unwrap()).collect::<Vec<_>>(),
+        files
+            .iter()
+            .map(|p| p.file_name().unwrap().to_str().unwrap())
+            .collect::<Vec<_>>(),
         vec!["Book Part 1.m4b", "Book Part 2.m4b", "Book Part 3.m4b"]
     );
 }
@@ -137,10 +137,7 @@ fn test_merge_synthesized_one_chapter_per_file() {
 
 #[test]
 fn test_pt_pattern_variation() {
-    let files: Vec<&Path> = vec![
-        Path::new("Story Pt 1.m4b"),
-        Path::new("Story Pt 2.m4b"),
-    ];
+    let files: Vec<&Path> = vec![Path::new("Story Pt 1.m4b"), Path::new("Story Pt 2.m4b")];
 
     let result = detect_merge_pattern(&files);
 
@@ -150,10 +147,7 @@ fn test_pt_pattern_variation() {
 
 #[test]
 fn test_disk_pattern_variation() {
-    let files: Vec<&Path> = vec![
-        Path::new("Novel Disk 1.m4b"),
-        Path::new("Novel Disk 2.m4b"),
-    ];
+    let files: Vec<&Path> = vec![Path::new("Novel Disk 1.m4b"), Path::new("Novel Disk 2.m4b")];
 
     let result = detect_merge_pattern(&files);
 
@@ -163,9 +157,7 @@ fn test_disk_pattern_variation() {
 
 #[test]
 fn test_single_file_no_pattern() {
-    let files: Vec<&Path> = vec![
-        Path::new("Single Book.m4b"),
-    ];
+    let files: Vec<&Path> = vec![Path::new("Single Book.m4b")];
 
     let result = detect_merge_pattern(&files);
 
@@ -224,7 +216,10 @@ fn test_sort_unpadded_numeric_prefix() {
         .map(|p| p.file_name().unwrap().to_str().unwrap())
         .collect();
 
-    assert_eq!(names, vec!["1 Chapter.m4b", "2 Chapter.m4b", "10 Chapter.m4b"]);
+    assert_eq!(
+        names,
+        vec!["1 Chapter.m4b", "2 Chapter.m4b", "10 Chapter.m4b"]
+    );
 }
 
 /// End-to-end check for issue #31: the scanner must hand the merger files in

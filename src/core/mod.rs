@@ -6,20 +6,20 @@
 //! - Processor: Single book processing (FFmpeg, metadata, chapters)
 //! - BatchProcessor: Parallel batch processing
 
-mod scanner;
 mod analyzer;
-mod processor;
 mod batch;
+mod m4b_merger;
+mod organizer;
+mod processor;
 mod progress;
 mod retry;
-mod organizer;
-mod m4b_merger;
+mod scanner;
 
-pub use scanner::{Scanner, is_audio_track_file, AUDIO_TRACK_EXTENSIONS};
 pub use analyzer::Analyzer;
-pub use processor::Processor;
 pub use batch::BatchProcessor;
-pub use progress::{BatchProgress, BookProgress, ProcessingStage};
-pub use retry::{RetryConfig, classify_error, retry_async, smart_retry_async, ErrorType};
-pub use organizer::{Organizer, OrganizeResult, OrganizeAction};
 pub use m4b_merger::M4bMerger;
+pub use organizer::{OrganizeAction, OrganizeResult, Organizer};
+pub use processor::Processor;
+pub use progress::{BatchProgress, BookProgress, ProcessingStage};
+pub use retry::{classify_error, retry_async, smart_retry_async, ErrorType, RetryConfig};
+pub use scanner::{is_audio_track_file, Scanner, AUDIO_TRACK_EXTENSIONS};

@@ -1,9 +1,9 @@
 //! Audible metadata models and types
 
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
-use anyhow::{bail, Result};
 
 /// Audible region with TLD mapping
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -79,7 +79,10 @@ impl FromStr for AudibleRegion {
             "it" => Ok(Self::IT),
             "in" => Ok(Self::IN),
             "es" => Ok(Self::ES),
-            _ => bail!("Invalid Audible region: {}. Valid regions: us, ca, uk, au, fr, de, jp, it, in, es", s),
+            _ => bail!(
+                "Invalid Audible region: {}. Valid regions: us, ca, uk, au, fr, de, jp, it, in, es",
+                s
+            ),
         }
     }
 }
@@ -358,7 +361,7 @@ mod tests {
     fn test_audible_chapter_to_chapter_conversion() {
         let audible_chapter = AudibleChapter {
             title: "Chapter 1".to_string(),
-            length_ms: 600_000, // 10 minutes
+            length_ms: 600_000,       // 10 minutes
             start_offset_ms: 300_000, // starts at 5 min
             start_offset_sec: Some(300),
         };

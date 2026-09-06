@@ -20,7 +20,13 @@ pub struct QualityProfile {
 
 impl QualityProfile {
     /// Create a new quality profile
-    pub fn new(bitrate: u32, sample_rate: u32, channels: u8, codec: String, duration: f64) -> anyhow::Result<Self> {
+    pub fn new(
+        bitrate: u32,
+        sample_rate: u32,
+        channels: u8,
+        codec: String,
+        duration: f64,
+    ) -> anyhow::Result<Self> {
         if bitrate == 0 {
             anyhow::bail!("Bitrate must be positive, got {}", bitrate);
         }
@@ -200,7 +206,10 @@ mod tests {
         let flac = QualityProfile::new(920, 44100, 2, "flac".to_string(), 3600.0).unwrap();
         let target = flac.to_encode_target();
 
-        assert_eq!(target.bitrate, 192, "stereo lossless should target 192k AAC");
+        assert_eq!(
+            target.bitrate, 192,
+            "stereo lossless should target 192k AAC"
+        );
         assert_eq!(target.sample_rate, 44100, "sample rate must be preserved");
         assert_eq!(target.channels, 2);
     }

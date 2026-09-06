@@ -1,6 +1,6 @@
 //! Integration tests for Audible metadata functionality
 
-use audiobook_forge::audio::{AudibleClient, detect_asin, clean_sequence};
+use audiobook_forge::audio::{clean_sequence, detect_asin, AudibleClient};
 use audiobook_forge::models::AudibleRegion;
 use audiobook_forge::utils::AudibleCache;
 
@@ -114,7 +114,11 @@ async fn test_real_asin_lookup() {
             assert_eq!(metadata.asin, "B00B5HZGUG");
             assert!(!metadata.title.is_empty());
             assert!(!metadata.authors.is_empty());
-            println!("Fetched: {} by {}", metadata.title, metadata.authors_string());
+            println!(
+                "Fetched: {} by {}",
+                metadata.title,
+                metadata.authors_string()
+            );
         }
         Err(e) => {
             // API might be down or rate limited

@@ -40,7 +40,12 @@ impl ProcessingResult {
     }
 
     /// Mark as successful with output path
-    pub fn success(mut self, output_path: PathBuf, processing_time: f64, used_copy_mode: bool) -> Self {
+    pub fn success(
+        mut self,
+        output_path: PathBuf,
+        processing_time: f64,
+        used_copy_mode: bool,
+    ) -> Self {
         self.success = true;
         self.output_path = Some(output_path.clone());
         self.processing_time = processing_time;
@@ -76,7 +81,11 @@ impl std::fmt::Display for ProcessingResult {
                 "✓ {} ({:.1}s, {})",
                 self.book_name,
                 self.processing_time,
-                if self.used_copy_mode { "copy mode" } else { "transcode" }
+                if self.used_copy_mode {
+                    "copy mode"
+                } else {
+                    "transcode"
+                }
             )?;
             if let Some(size_mb) = self.output_size_mb() {
                 write!(f, " - {:.1} MB", size_mb)?;
@@ -100,8 +109,11 @@ mod tests {
 
     #[test]
     fn test_result_success() {
-        let result = ProcessingResult::new("Test Book".to_string())
-            .success(PathBuf::from("/output/test.m4b"), 120.5, true);
+        let result = ProcessingResult::new("Test Book".to_string()).success(
+            PathBuf::from("/output/test.m4b"),
+            120.5,
+            true,
+        );
 
         assert!(result.success);
         assert_eq!(result.processing_time, 120.5);

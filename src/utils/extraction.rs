@@ -1,7 +1,7 @@
 //! Metadata extraction from M4B files and filenames
 
 use crate::models::{CurrentMetadata, MetadataSource};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use std::path::Path;
 
 /// Extract metadata from M4B file (embedded tags first, filename fallback)
@@ -19,12 +19,13 @@ pub fn extract_current_metadata(file_path: &Path) -> Result<CurrentMetadata> {
 
 /// Extract from embedded M4B tags
 fn extract_from_embedded_tags(file_path: &Path) -> Result<CurrentMetadata> {
-    let tag = mp4ameta::Tag::read_from_path(file_path)
-        .context("Failed to read M4B metadata")?;
+    let tag = mp4ameta::Tag::read_from_path(file_path).context("Failed to read M4B metadata")?;
 
     Ok(CurrentMetadata {
         title: tag.title().map(|s| s.to_string()),
-        author: tag.artist().map(|s| s.to_string())
+        author: tag
+            .artist()
+            .map(|s| s.to_string())
             .or_else(|| tag.album_artist().map(|s| s.to_string())),
         year: tag.year().and_then(|s| s.parse::<u32>().ok()),
         duration: None, // TODO: get from FFprobe if needed
@@ -34,10 +35,7 @@ fn extract_from_embedded_tags(file_path: &Path) -> Result<CurrentMetadata> {
 
 /// Extract from filename using pattern matching
 fn extract_from_filename(file_path: &Path) -> Result<CurrentMetadata> {
-    let filename = file_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+    let filename = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
 
     // Pattern: "Author - Title"
     if let Some((author, title)) = parse_author_title_pattern(filename) {
@@ -71,7 +69,11 @@ fn parse_author_title_pattern(filename: &str) -> Option<(String, String)> {
         if parts.len() >= 2 {
             // Clean up underscores from author/title and convert to spaces
             let author = parts[0].replace('_', " ").trim().to_string();
-            let title = parts[1..].join(separator).replace('_', " ").trim().to_string();
+            let title = parts[1..]
+                .join(separator)
+                .replace('_', " ")
+                .trim()
+                .to_string();
 
             // Only return if both author and title are non-empty
             if !author.is_empty() && !title.is_empty() {
@@ -95,7 +97,8 @@ mod tests {
         assert_eq!(title, "Project Hail Mary");
 
         // Multiple hyphens
-        let (author, title) = parse_author_title_pattern("Isaac Asimov - I, Robot - Complete Edition").unwrap();
+        let (author, title) =
+            parse_author_title_pattern("Isaac Asimov - I, Robot - Complete Edition").unwrap();
         assert_eq!(author, "Isaac Asimov");
         assert_eq!(title, "I, Robot - Complete Edition");
 
@@ -104,12 +107,14 @@ mod tests {
         assert_eq!(author, "Adam Phillips");
         assert_eq!(title, "On Giving Up");
 
-        let (author, title) = parse_author_title_pattern("Morgan_Housel_-_The_Art_of_Spending_Money").unwrap();
+        let (author, title) =
+            parse_author_title_pattern("Morgan_Housel_-_The_Art_of_Spending_Money").unwrap();
         assert_eq!(author, "Morgan Housel");
         assert_eq!(title, "The Art of Spending Money");
 
         // Mixed underscores and spaces
-        let (author, title) = parse_author_title_pattern("Neil_deGrasse_Tyson - Just Visiting This Planet").unwrap();
+        let (author, title) =
+            parse_author_title_pattern("Neil_deGrasse_Tyson - Just Visiting This Planet").unwrap();
         assert_eq!(author, "Neil deGrasse Tyson");
         assert_eq!(title, "Just Visiting This Planet");
 

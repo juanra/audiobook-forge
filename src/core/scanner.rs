@@ -1,6 +1,6 @@
 //! Directory scanner for discovering audiobook folders
 
-use crate::models::{BookFolder, BookCase, Config};
+use crate::models::{BookCase, BookFolder, Config};
 use anyhow::{Context, Result};
 use std::path::Path;
 use walkdir::WalkDir;
@@ -170,7 +170,10 @@ impl Scanner {
         book.classify();
 
         // Only return if it's a valid audiobook folder (Cases A, B, C, or E)
-        if matches!(book.case, BookCase::A | BookCase::B | BookCase::C | BookCase::E) {
+        if matches!(
+            book.case,
+            BookCase::A | BookCase::B | BookCase::C | BookCase::E
+        ) {
             // Sort both track lists naturally. M4B files are sorted unconditionally:
             // `--merge-m4b` can force a merge of a Case C folder too, and raw
             // `read_dir` order is never the right playback order (issue #31).

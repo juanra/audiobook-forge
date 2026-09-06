@@ -1,17 +1,25 @@
 //! Data models for audiobook processing
 
-mod book;
-mod track;
-mod quality;
-mod config;
-mod result;
 mod audible;
+mod book;
+mod config;
 mod match_models;
+mod quality;
+mod result;
+mod track;
 
-pub use book::{BookFolder, BookCase};
-pub use track::Track;
+pub use audible::{
+    AudibleAuthor, AudibleChapter, AudibleMetadata, AudibleRegion, AudibleSearchResult,
+    AudibleSeries, AudnexChaptersResponse,
+};
+pub use book::{BookCase, BookFolder};
+pub use config::{
+    AdvancedConfig, AudibleConfig, Config, DirectoryConfig, LoggingConfig, MatchMode,
+    MetadataConfig, OrganizationConfig, ProcessingConfig, QualityConfig,
+};
+pub use match_models::{
+    CurrentMetadata, MatchCandidate, MatchConfidence, MetadataDistance, MetadataSource,
+};
 pub use quality::QualityProfile;
-pub use config::{Config, DirectoryConfig, ProcessingConfig, QualityConfig, MetadataConfig, AudibleConfig, OrganizationConfig, LoggingConfig, AdvancedConfig, MatchMode};
 pub use result::ProcessingResult;
-pub use audible::{AudibleMetadata, AudibleAuthor, AudibleSeries, AudibleRegion, AudibleSearchResult, AudibleChapter, AudnexChaptersResponse};
-pub use match_models::{MatchCandidate, MetadataDistance, MatchConfidence, CurrentMetadata, MetadataSource};
+pub use track::Track;

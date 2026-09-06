@@ -1,6 +1,6 @@
 //! Audiobook folder model
 
-use super::{QualityProfile, Track, AudibleMetadata};
+use super::{AudibleMetadata, QualityProfile, Track};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -250,10 +250,7 @@ mod tests {
         let mut book = BookFolder::new(PathBuf::from("/path/to/book"));
 
         // Case A: multiple MP3s
-        book.mp3_files = vec![
-            PathBuf::from("1.mp3"),
-            PathBuf::from("2.mp3"),
-        ];
+        book.mp3_files = vec![PathBuf::from("1.mp3"), PathBuf::from("2.mp3")];
         book.classify();
         assert_eq!(book.case, BookCase::A);
 

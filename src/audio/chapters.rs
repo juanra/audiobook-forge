@@ -36,8 +36,10 @@ impl Chapter {
     /// Format as MP4Box chapter format
     pub fn to_mp4box_format(&self) -> String {
         let start_time = format_time_ms(self.start_time_ms);
-        format!("CHAPTER{}={}\nCHAPTER{}NAME={}\n",
-            self.number, start_time, self.number, self.title)
+        format!(
+            "CHAPTER{}={}\nCHAPTER{}NAME={}\n",
+            self.number, start_time, self.number, self.title
+        )
     }
 }
 
@@ -49,7 +51,10 @@ fn format_time_ms(ms: u64) -> String {
     let minutes = (total_seconds % 3600) / 60;
     let seconds = total_seconds % 60;
 
-    format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, milliseconds)
+    format!(
+        "{:02}:{:02}:{:02}.{:03}",
+        hours, minutes, seconds, milliseconds
+    )
 }
 
 /// Generate chapters from file list (one file = one chapter)
@@ -88,8 +93,7 @@ pub fn generate_chapters_from_files(
 
 /// Parse CUE file and extract chapters
 pub fn parse_cue_file(cue_path: &Path) -> Result<Vec<Chapter>> {
-    let content = std::fs::read_to_string(cue_path)
-        .context("Failed to read CUE file")?;
+    let content = std::fs::read_to_string(cue_path).context("Failed to read CUE file")?;
 
     let mut chapters = Vec::new();
     let mut current_chapter = 1u32;
@@ -158,17 +162,13 @@ pub fn write_mp4box_chapters(chapters: &[Chapter], output_path: &Path) -> Result
         content.push_str(&chapter.to_mp4box_format());
     }
 
-    std::fs::write(output_path, content)
-        .context("Failed to write chapter file")?;
+    std::fs::write(output_path, content).context("Failed to write chapter file")?;
 
     Ok(())
 }
 
 /// Inject chapters into M4B file using MP4Box
-pub async fn inject_chapters_mp4box(
-    m4b_file: &Path,
-    chapters_file: &Path,
-) -> Result<()> {
+pub async fn inject_chapters_mp4box(m4b_file: &Path, chapters_file: &Path) -> Result<()> {
     let output = tokio::process::Command::new("MP4Box")
         .args(&["-chap", &chapters_file.display().to_string()])
         .arg(m4b_file)

@@ -1,6 +1,8 @@
 //! Interactive prompts for metadata matching
 
-use crate::models::{AudibleMetadata, CurrentMetadata, MatchCandidate, MatchConfidence, AudibleAuthor};
+use crate::models::{
+    AudibleAuthor, AudibleMetadata, CurrentMetadata, MatchCandidate, MatchConfidence,
+};
 use anyhow::Result;
 use console::style;
 use inquire::list_option::ListOption;
@@ -66,7 +68,11 @@ pub fn prompt_match_selection(
     // the chosen POSITION (see `dispatch_selection`) — NOT by parsing the label,
     // which previously misread ANSI SGR digits (e.g. "\x1b[32m") as the option
     // number and applied the wrong candidate (see issue #12).
-    options.push(style("───────────────────────────────────").dim().to_string());
+    options.push(
+        style("───────────────────────────────────")
+            .dim()
+            .to_string(),
+    );
     options.push(style("[S] Skip this file").yellow().to_string());
     options.push(style("[M] Enter metadata manually").cyan().to_string());
     options.push(style("[R] Search with different terms").blue().to_string());
@@ -105,10 +111,7 @@ fn dispatch_selection(index: usize, num_candidates: usize) -> UserChoice {
 }
 
 /// Show detailed comparison and confirm selection
-pub fn confirm_match(
-    current: &CurrentMetadata,
-    selected: &MatchCandidate,
-) -> Result<bool> {
+pub fn confirm_match(current: &CurrentMetadata, selected: &MatchCandidate) -> Result<bool> {
     println!("\n{}", style("Metadata Changes:").bold().cyan());
     println!();
 
@@ -121,11 +124,7 @@ pub fn confirm_match(
     show_field_change(
         "Author",
         current.author.as_deref(),
-        selected
-            .metadata
-            .authors
-            .first()
-            .map(|a| a.name.as_str()),
+        selected.metadata.authors.first().map(|a| a.name.as_str()),
     );
 
     if let Some(subtitle) = &selected.metadata.subtitle {
@@ -207,19 +206,11 @@ pub fn prompt_manual_metadata() -> Result<AudibleMetadata> {
 pub fn prompt_custom_search() -> Result<(Option<String>, Option<String>)> {
     println!("\n{}", style("Custom Search:").bold().cyan());
 
-    let title = Text::new("Title (optional):")
-        .with_default("")
-        .prompt()?;
+    let title = Text::new("Title (optional):").with_default("").prompt()?;
 
-    let author = Text::new("Author (optional):")
-        .with_default("")
-        .prompt()?;
+    let author = Text::new("Author (optional):").with_default("").prompt()?;
 
-    let title_opt = if title.is_empty() {
-        None
-    } else {
-        Some(title)
-    };
+    let title_opt = if title.is_empty() { None } else { Some(title) };
     let author_opt = if author.is_empty() {
         None
     } else {
@@ -242,11 +233,7 @@ fn show_field_change(field: &str, old: Option<&str>, new: Option<&str>) {
             style(new_display).green()
         );
     } else {
-        println!(
-            "  {}: {}",
-            style(field).bold(),
-            style(new_display).dim()
-        );
+        println!("  {}: {}", style(field).bold(), style(new_display).dim());
     }
 }
 
@@ -312,7 +299,10 @@ mod tests {
 
     #[test]
     fn dispatch_single_candidate() {
-        assert!(matches!(dispatch_selection(0, 1), UserChoice::SelectMatch(0)));
+        assert!(matches!(
+            dispatch_selection(0, 1),
+            UserChoice::SelectMatch(0)
+        ));
         assert!(matches!(dispatch_selection(2, 1), UserChoice::Skip)); // Skip row
     }
 }
