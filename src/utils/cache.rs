@@ -18,13 +18,22 @@ impl AudibleCache {
         Self::with_ttl(Duration::from_secs(7 * 24 * 3600))
     }
 
-    /// Create a new cache with custom TTL
+    /// Create a new cache with custom TTL, in the default per-user cache directory
     pub fn with_ttl(ttl: Duration) -> Result<Self> {
         let cache_dir = dirs::cache_dir()
             .context("No cache directory found")?
             .join("audiobook-forge")
             .join("audible");
 
+        Self::with_cache_dir(cache_dir, ttl)
+    }
+
+    /// Create a cache rooted at an explicit directory.
+    ///
+    /// Lets a caller keep a cache outside the per-user location, and lets tests
+    /// run against an isolated directory instead of sharing (and mutating) the
+    /// developer's real cache.
+    pub fn with_cache_dir(cache_dir: std::path::PathBuf, ttl: Duration) -> Result<Self> {
         // Create cache directory if it doesn't exist
         std::fs::create_dir_all(&cache_dir)
             .context("Failed to create cache directory")?;
@@ -222,15 +231,28 @@ mod tests {
         }
     }
 
+    /// An isolated cache directory, so tests never read or mutate the developer's
+    /// real cache and cannot race each other over shared ASIN keys.
+    fn test_cache(label: &str, ttl: Duration) -> (AudibleCache, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "audiobook-forge-cache-test-{}-{}",
+            std::process::id(),
+            label
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let cache = AudibleCache::with_cache_dir(dir.clone(), ttl).unwrap();
+        (cache, dir)
+    }
+
+    const TEST_TTL: Duration = Duration::from_secs(7 * 24 * 3600);
+
     #[tokio::test]
     async fn test_cache_set_and_get() {
-        let cache = AudibleCache::new().unwrap();
+        let (cache, dir) = test_cache("set-and-get", TEST_TTL);
         let metadata = create_test_metadata();
 
-        // Set cache
         cache.set("B001", &metadata).await.unwrap();
 
-        // Get cache
         let cached = cache.get("B001").await;
         assert!(cached.is_some());
 
@@ -238,21 +260,22 @@ mod tests {
         assert_eq!(cached.asin, "B001");
         assert_eq!(cached.title, "Test Book");
 
-        // Clean up
-        cache.clear("B001").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
     async fn test_cache_miss() {
-        let cache = AudibleCache::new().unwrap();
+        let (cache, dir) = test_cache("miss", TEST_TTL);
 
         let cached = cache.get("NONEXISTENT").await;
         assert!(cached.is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
     async fn test_cache_disabled() {
-        let cache = AudibleCache::with_ttl(Duration::from_secs(0)).unwrap();
+        let (cache, dir) = test_cache("disabled", Duration::from_secs(0));
         let metadata = create_test_metadata();
 
         // Set cache (should be no-op)
@@ -261,15 +284,31 @@ mod tests {
         // Get cache (should return None since caching is disabled)
         let cached = cache.get("B001").await;
         assert!(cached.is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
-    #[test]
-    fn test_cache_stats() {
-        let cache = AudibleCache::new().unwrap();
-        let stats = cache.stats().unwrap();
+    #[tokio::test]
+    async fn test_cache_stats_counts_written_entries() {
+        // `file_count` and `total_size_bytes` are unsigned, so the previous
+        // `>= 0` assertions were always true and proved nothing. Assert instead
+        // that stats actually track what was written.
+        let (cache, dir) = test_cache("stats", TEST_TTL);
 
-        // Just verify it doesn't crash
-        assert!(stats.file_count >= 0);
-        assert!(stats.total_size_bytes >= 0);
+        let before = cache.stats().unwrap();
+        assert_eq!(before.file_count, 0);
+        assert_eq!(before.total_size_bytes, 0);
+
+        cache.set("B001", &create_test_metadata()).await.unwrap();
+
+        let after = cache.stats().unwrap();
+        assert_eq!(after.file_count, 1, "one cached entry should be counted");
+        assert!(
+            after.total_size_bytes > 0,
+            "a written entry should contribute bytes"
+        );
+        assert!(after.size_mb() > 0.0);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
