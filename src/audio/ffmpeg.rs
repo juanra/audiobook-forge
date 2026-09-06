@@ -432,9 +432,10 @@ impl FFmpeg {
         let json: Value = serde_json::from_slice(&output.stdout)
             .context("Failed to parse ffprobe JSON output")?;
 
-        let duration_secs = json["format"]["duration"]
-            .as_str()
-            .and_then(|s| s.parse::<f64>().ok())
+        // Read via parse_f64_field: ffprobe reports numeric fields as JSON strings
+        // on most builds but as numbers on some, and assuming strings here was the
+        // same defect fixed for bitrate in issue #18.
+        let duration_secs = parse_f64_field(&json["format"]["duration"])
             .with_context(|| format!("No duration found for {}", path.display()))?;
         let duration_ms = (duration_secs * 1000.0).round() as u64;
 
@@ -544,6 +545,19 @@ mod tests {
         assert_eq!(profile.bitrate, 960);
         assert_eq!(profile.sample_rate, 48000);
         assert!((profile.duration - 1200.0).abs() < 0.1);
+    }
+
+    /// Duration must be read with the same string-or-number tolerance as bitrate.
+    /// probe_duration_and_title parsed it as a string only, so a build reporting
+    /// numeric fields would fail there while succeeding in parse_ffprobe_output.
+    #[test]
+    fn test_parse_duration_field_accepts_string_and_number() {
+        let as_string: Value = serde_json::from_str(r#"{"duration": "1234.5"}"#).unwrap();
+        let as_number: Value = serde_json::from_str(r#"{"duration": 1234.5}"#).unwrap();
+
+        assert_eq!(parse_f64_field(&as_string["duration"]), Some(1234.5));
+        assert_eq!(parse_f64_field(&as_number["duration"]), Some(1234.5));
+        assert_eq!(parse_f64_field(&as_string["missing"]), None);
     }
 
     /// When neither the stream nor the format carries a bitrate, the error must
