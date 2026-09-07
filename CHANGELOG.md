@@ -5,6 +5,37 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`-j` did not limit how many books were processed at once** (#27): the worker
+  count was stored and logged but never reached the semaphore gating book
+  processing, which was built from `max_concurrent_encodes` alone. The effective
+  limit is now `min(workers, max_concurrent_encodes)`. Thanks to
+  [@JKamsker](https://github.com/JKamsker) for the fix.
+  **Behaviour change:** with the default config (`parallel_workers: 2`,
+  `max_concurrent_encodes: auto`) concurrency drops from one book per CPU core to
+  2, which is what `-j` always advertised. Raise `-j` or `parallel_workers` to
+  restore the previous level.
+- **Chapters in later M4B parts started too early** (#28): the running offset
+  advanced by the previous part's last chapter end rather than by the file's
+  duration. A chapter marker need not reach the end of the media, and the concat
+  demuxer appends whole files, so trailing audio was dropped from the offset and
+  the error accumulated across every part. Chapter lists are now paired with the
+  duration they came from. Thanks to [@JKamsker](https://github.com/JKamsker) for
+  the fix.
+- **Multi-disc audiobooks were split into one book per disc** (#26): a folder
+  containing `CD1/` and `CD2/` produced two books with disc order lost, because a
+  candidate folder was judged only on the files directly inside it. Subfolders are
+  now folded into their parent when the parent has no direct audio and every
+  subfolder is a numbered part folder forming a complete `1..n` set, which leaves
+  ordinary nested `Author/Book` libraries untouched. Thanks to
+  [@JKamsker](https://github.com/JKamsker) for the fix.
+
+### Contributors
+- [@JKamsker](https://github.com/JKamsker) — the worker-limit fix (#27), the M4B
+  chapter offset fix (#28), and multi-disc directory support (#26)
+
 ## [2.11.3] - 2026-09-07
 
 ### Fixed
