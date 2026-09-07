@@ -30,25 +30,17 @@ jobs:
 
       - uses: github/codeql-action/analyze@v3
 
-  audit:
-    name: Dependency advisories
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      # Checks Cargo.lock against the RustSec advisory database. This is the
-      # channel most real Rust vulnerabilities arrive through: a dependency,
-      # not our own code.
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
   deny:
-    name: Licenses and bans
+    name: Advisories, licences and sources
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      # cargo-deny covers the RustSec advisory database as well as licences,
+      # banned crates and source registries, and it honours the documented
+      # exceptions in deny.toml. rustsec/audit-check was dropped: it duplicated
+      # the advisory check, could not read those exceptions, and needed
+      # `checks: write` to report at all.
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories bans licenses sources
