@@ -413,3 +413,55 @@ async fn test_analyzing_m4b_only_book_is_not_an_error() {
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn test_scanner_treats_disc_subdirectories_as_one_audiobook() {
+    let temp_dir = TempDir::new().unwrap();
+    let book = temp_dir.path().join("My Book");
+    let cd1 = book.join("CD1");
+    let cd2 = book.join("CD2");
+    fs::create_dir_all(&cd1).unwrap();
+    fs::create_dir_all(&cd2).unwrap();
+    fs::write(cd1.join("01.mp3"), b"fake mp3").unwrap();
+    fs::write(cd2.join("01.mp3"), b"fake mp3").unwrap();
+
+    let books = Scanner::new().scan_directory(temp_dir.path()).unwrap();
+
+    assert_eq!(books.len(), 1);
+    assert_eq!(books[0].name, "My Book");
+    assert_eq!(books[0].mp3_files.len(), 2);
+    assert_eq!(
+        books[0]
+            .mp3_files
+            .iter()
+            .map(|path| path
+                .parent()
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_string_lossy())
+            .collect::<Vec<_>>(),
+        ["CD1", "CD2"]
+    );
+}
+
+#[test]
+fn test_scanner_keeps_books_below_author_directory_separate() {
+    let temp_dir = TempDir::new().unwrap();
+    let author = temp_dir.path().join("Author");
+    let book_one = author.join("Book One");
+    let book_two = author.join("Book Two");
+    fs::create_dir_all(&book_one).unwrap();
+    fs::create_dir_all(&book_two).unwrap();
+    fs::write(book_one.join("01.mp3"), b"fake mp3").unwrap();
+    fs::write(book_two.join("01.mp3"), b"fake mp3").unwrap();
+
+    let mut books = Scanner::new().scan_directory(temp_dir.path()).unwrap();
+    books.sort_by(|left, right| left.name.cmp(&right.name));
+
+    assert_eq!(books.len(), 2);
+    assert_eq!(books[0].name, "Book One");
+    assert_eq!(books[1].name, "Book Two");
+    assert_eq!(books[0].mp3_files.len(), 1);
+    assert_eq!(books[1].mp3_files.len(), 1);
+}

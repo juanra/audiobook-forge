@@ -80,13 +80,15 @@ impl Scanner {
         let mut book_folders = Vec::new();
 
         // Walk through directory tree, but only go 2 levels deep
-        // (root → book folders → files)
-        for entry in WalkDir::new(root)
+        // (root → book folders → disc folders). Once a book is found, skip its
+        // descendants so disc folders are not emitted as separate audiobooks.
+        let mut entries = WalkDir::new(root)
             .max_depth(2)
             .min_depth(1)
             .into_iter()
-            .filter_entry(|e| e.file_type().is_dir())
-        {
+            .filter_entry(|e| e.file_type().is_dir());
+
+        while let Some(entry) = entries.next() {
             let entry = entry.context("Failed to read directory entry")?;
             let path = entry.path();
 
@@ -98,6 +100,7 @@ impl Scanner {
             // Check if this is a valid audiobook folder
             if let Some(book) = self.scan_folder(path)? {
                 book_folders.push(book);
+                entries.skip_current_dir();
             }
         }
 
@@ -126,43 +129,25 @@ impl Scanner {
     fn scan_folder(&self, path: &Path) -> Result<Option<BookFolder>> {
         let mut book = BookFolder::new(path.to_path_buf());
 
-        // Find audio files
+        self.scan_files_in_directory(&mut book, path)?;
+
+        // Only fold immediate children into the parent when the parent has no
+        // direct audio and every child is a sequential disc/part directory.
+        // This preserves nested layouts such as Author/Book One and
+        // Author/Book Two as two independent books.
+        let parent_has_audio = !book.mp3_files.is_empty() || !book.m4b_files.is_empty();
+        let mut child_directories = Vec::new();
         for entry in std::fs::read_dir(path).context("Failed to read directory")? {
             let entry = entry.context("Failed to read directory entry")?;
-            let file_path = entry.path();
-
-            if !file_path.is_file() {
-                continue;
+            let child_path = entry.path();
+            if child_path.is_dir() && !self.is_hidden(&child_path) {
+                child_directories.push(child_path);
             }
+        }
 
-            let extension = file_path
-                .extension()
-                .and_then(|s| s.to_str())
-                .map(|s| s.to_lowercase());
-
-            match extension.as_deref() {
-                Some("mp3") => {
-                    book.mp3_files.push(file_path);
-                }
-                Some("m4b") => {
-                    book.m4b_files.push(file_path);
-                }
-                Some("m4a") | Some("flac") => {
-                    // These files are treated like MP3s (can be converted)
-                    book.mp3_files.push(file_path);
-                }
-                Some("cue") => {
-                    book.cue_file = Some(file_path);
-                }
-                Some("jpg") | Some("png") | Some("jpeg") => {
-                    // Check if this is a cover art file
-                    if book.cover_file.is_none() {
-                        if self.is_cover_art(&file_path) {
-                            book.cover_file = Some(file_path);
-                        }
-                    }
-                }
-                _ => {}
+        if !parent_has_audio && crate::utils::are_sequential_part_directories(&child_directories) {
+            for child_path in child_directories {
+                self.scan_files_in_directory(&mut book, &child_path)?;
             }
         }
 
@@ -225,6 +210,49 @@ impl Scanner {
         } else {
             Ok(None)
         }
+    }
+
+    /// Add supported audiobook files from one directory to a book.
+    fn scan_files_in_directory(&self, book: &mut BookFolder, directory: &Path) -> Result<()> {
+        for entry in std::fs::read_dir(directory).context("Failed to read directory")? {
+            let entry = entry.context("Failed to read directory entry")?;
+            let file_path = entry.path();
+
+            if !file_path.is_file() {
+                continue;
+            }
+
+            let extension = file_path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_lowercase());
+
+            match extension.as_deref() {
+                Some("mp3") => {
+                    book.mp3_files.push(file_path);
+                }
+                Some("m4b") => {
+                    book.m4b_files.push(file_path);
+                }
+                Some("m4a") | Some("flac") => {
+                    // These files are treated like MP3s (can be converted)
+                    book.mp3_files.push(file_path);
+                }
+                Some("cue") => {
+                    book.cue_file = Some(file_path);
+                }
+                Some("jpg") | Some("png") | Some("jpeg") => {
+                    // Check if this is a cover art file
+                    if book.cover_file.is_none() {
+                        if self.is_cover_art(&file_path) {
+                            book.cover_file = Some(file_path);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
     /// Check if a path is hidden (starts with .)
