@@ -18,7 +18,7 @@ pub struct BatchProcessor {
     encoder: AacEncoder,
     /// Enable parallel file encoding
     enable_parallel_encoding: bool,
-    /// Maximum concurrent encoding operations (to limit CPU usage)
+    /// Effective maximum number of books processed concurrently
     max_concurrent_encodes: usize,
     /// Maximum concurrent file encodings per book
     max_concurrent_files: usize,
@@ -31,13 +31,16 @@ pub struct BatchProcessor {
 impl BatchProcessor {
     /// Create a new batch processor with default settings
     pub fn new(workers: usize) -> Self {
+        let workers = workers.clamp(1, 16);
         Self {
-            workers: workers.clamp(1, 16),
+            workers,
             keep_temp: false,
             encoder: crate::audio::get_encoder(),
             enable_parallel_encoding: true,
-            max_concurrent_encodes: 2, // Default: 2 concurrent encodes
-            max_concurrent_files: 8,   // Default: 8 concurrent files per book
+            // The default safety cap is two books, or fewer when the worker
+            // count itself is lower.
+            max_concurrent_encodes: 2.min(workers),
+            max_concurrent_files: 8, // Default: 8 concurrent files per book
             quality_preset: None,
             retry_config: RetryConfig::new(),
         }
@@ -54,12 +57,16 @@ impl BatchProcessor {
         quality_preset: Option<String>,
         retry_config: RetryConfig,
     ) -> Self {
+        let workers = workers.clamp(1, 16);
         Self {
-            workers: workers.clamp(1, 16),
+            workers,
             keep_temp,
             encoder,
             enable_parallel_encoding,
-            max_concurrent_encodes: max_concurrent_encodes.clamp(1, 16),
+            // `workers` is the user-facing batch concurrency setting. The
+            // encoding cap may lower it further, but must never let `-j` be
+            // exceeded.
+            max_concurrent_encodes: max_concurrent_encodes.clamp(1, 16).min(workers),
             max_concurrent_files: max_concurrent_files.clamp(1, 32),
             quality_preset,
             retry_config,
@@ -86,8 +93,8 @@ impl BatchProcessor {
             self.max_concurrent_encodes
         );
 
-        // Create a semaphore to limit concurrent encoding operations
-        let encode_semaphore = Arc::new(Semaphore::new(self.max_concurrent_encodes));
+        // Each permit covers one complete book-processing task.
+        let book_semaphore = Arc::new(Semaphore::new(self.max_concurrent_encodes));
 
         // Create channel for collecting results
         let (result_tx, mut result_rx) = mpsc::channel(total_books);
@@ -104,12 +111,12 @@ impl BatchProcessor {
             let enable_parallel_encoding = self.enable_parallel_encoding;
             let max_concurrent_files = self.max_concurrent_files;
             let quality_preset = self.quality_preset.clone();
-            let encode_semaphore = Arc::clone(&encode_semaphore);
+            let book_semaphore = Arc::clone(&book_semaphore);
             let retry_config = self.retry_config.clone();
 
             let handle = tokio::spawn(async move {
-                // Acquire semaphore permit before encoding (limits concurrent encodes)
-                let _permit = encode_semaphore.acquire().await.unwrap();
+                // Acquire one worker permit for the full lifetime of this book.
+                let _permit = book_semaphore.acquire().await.unwrap();
 
                 tracing::info!("[{}/{}] Processing: {}", index + 1, total_books, book.name);
 
@@ -255,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn test_concurrent_encode_clamping() {
+    fn test_concurrent_encode_and_worker_clamping() {
         let processor = BatchProcessor::with_options(
             4,
             false,
@@ -268,7 +275,19 @@ mod tests {
         );
         assert_eq!(processor.max_concurrent_encodes, 1);
 
-        let processor = BatchProcessor::with_options(
+        let clamped_to_supported_max = BatchProcessor::with_options(
+            16,
+            false,
+            AacEncoder::Native,
+            true,
+            100,
+            8,
+            None,
+            RetryConfig::new(),
+        );
+        assert_eq!(clamped_to_supported_max.max_concurrent_encodes, 16);
+
+        let clamped_to_workers = BatchProcessor::with_options(
             4,
             false,
             AacEncoder::Native,
@@ -278,7 +297,23 @@ mod tests {
             None,
             RetryConfig::new(),
         );
-        assert_eq!(processor.max_concurrent_encodes, 16);
+        assert_eq!(clamped_to_workers.max_concurrent_encodes, 4);
+    }
+
+    #[test]
+    fn test_worker_count_limits_batch_encodes() {
+        let processor = BatchProcessor::with_options(
+            1,
+            false,
+            AacEncoder::Native,
+            true,
+            8,
+            8,
+            None,
+            RetryConfig::new(),
+        );
+
+        assert_eq!(processor.max_concurrent_encodes, 1);
     }
 
     #[test]
