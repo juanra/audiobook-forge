@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: fmt / clippy / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@v2
+
+      # Several tests shell out to ffprobe/ffmpeg to probe real media, and the
+      # encoder test asserts that at least one AAC encoder is available.
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      # Not yet `-D warnings`: the codebase carries ~70 pre-existing clippy
+      # warnings. This gate blocks clippy *errors* (deny-by-default lints, which
+      # catch real defects) so it is useful from day one; tightening to
+      # `-D warnings` is tracked separately so the cleanup does not have to land
+      # in the same change as turning CI on.
+      - name: Clippy
+        run: cargo clippy --all-targets
+
+      - name: Test
+        run: cargo test --all-targets
