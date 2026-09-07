@@ -6,10 +6,11 @@ yanked = "warn"
 ignore = [
     # h2 unbounded empty DATA frames (DoS). Reaching the patched 0.4.16 means
     # moving reqwest 0.11 -> 0.12, a major bump that touches the Audible client.
-    # Tracked separately rather than rushed in alongside enabling CI.
+    # Tracked in issue #34 rather than rushed in alongside enabling CI.
     "RUSTSEC-2026-0258",
     # Unmaintained crates, not exploitable on their own. Both arrive through
     # dependencies (indicatif, reqwest) and neither has a safe upgrade today.
+    # Also noted in issue #34; rustls-pemfile may resolve with that upgrade.
     "RUSTSEC-2025-0119", # number_prefix
     "RUSTSEC-2025-0134", # rustls-pemfile
 ]
