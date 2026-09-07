@@ -66,13 +66,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.git-blame-ignore-revs` and `git blame` skips it.
 
 ### Contributors
-Thanks to the contributors who reported the bugs fixed in this release:
-- [@virtualistic](https://github.com/virtualistic) — reported the M4B merge ordering bug (#31)
-- [@christopherpross](https://github.com/christopherpross) — reported the library scan abort, with a precise reproduction (#30)
-- [@dkuester](https://github.com/dkuester) — reported the FLAC transcode failure (#18)
 - [@JKamsker](https://github.com/JKamsker) — diagnosed the analyzer track-ordering
-  bug and proposed the same fix in #25, weeks before it was rediscovered and
-  shipped here
+  bug and wrote the same fix in #25, weeks before it was rediscovered and shipped
+  here (#25)
+
+### Reported by
+- [@virtualistic](https://github.com/virtualistic) — the M4B merge ordering bug (#31)
+- [@christopherpross](https://github.com/christopherpross) — the library scan abort,
+  with a precise reproduction (#30)
+- [@dkuester](https://github.com/dkuester) — the FLAC transcode failure (#18)
 
 ## [2.11.2] - 2026-07-09
 
@@ -92,9 +94,8 @@ Thanks to the contributors who reported the bugs fixed in this release:
   the scanner now logs a warning that the output will have no cover art (the
   embedded source cover is dropped during conversion/merge).
 
-### Contributors
-Thanks to the contributors whose work shipped in this release:
-- [@virtualistic](https://github.com/virtualistic) — reported the M4B merge cover-art regression (#17)
+### Reported by
+- [@virtualistic](https://github.com/virtualistic) — the M4B merge cover-art regression (#17)
 
 ## [2.11.1] - 2026-07-03
 
