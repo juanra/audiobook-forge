@@ -404,23 +404,24 @@ fn merge_keep_timestamps(existing: &[Chapter], new: &[Chapter]) -> Result<Vec<Ch
 
 /// Merge chapter lists from multiple M4B files with adjusted timestamps
 ///
-/// Takes a slice of chapter lists (one per M4B file) and combines them into
-/// a single list with correctly offset timestamps. Each subsequent file's
-/// chapters are offset by the cumulative duration of previous files.
-pub fn merge_chapter_lists(chapter_lists: &[Vec<Chapter>]) -> Vec<Chapter> {
-    if chapter_lists.is_empty() {
+/// Takes chapter lists paired with their source file durations and combines
+/// them into a single list with correctly offset timestamps.
+/// Each subsequent file's chapters are offset by the cumulative media duration
+/// of previous files, including audio after the final chapter marker.
+pub fn merge_chapter_lists(chapter_parts: &[(Vec<Chapter>, u64)]) -> Vec<Chapter> {
+    if chapter_parts.is_empty() {
         return Vec::new();
     }
 
-    if chapter_lists.len() == 1 {
-        return chapter_lists[0].clone();
+    if chapter_parts.len() == 1 {
+        return chapter_parts[0].0.clone();
     }
 
     let mut merged = Vec::new();
     let mut cumulative_offset: u64 = 0;
     let mut chapter_number: u32 = 1;
 
-    for chapters in chapter_lists {
+    for (chapters, duration_ms) in chapter_parts {
         for chapter in chapters {
             let adjusted_start = chapter.start_time_ms + cumulative_offset;
             let adjusted_end = chapter.end_time_ms + cumulative_offset;
@@ -434,10 +435,7 @@ pub fn merge_chapter_lists(chapter_lists: &[Vec<Chapter>]) -> Vec<Chapter> {
             chapter_number += 1;
         }
 
-        // Update cumulative offset based on the last chapter's end time
-        if let Some(last) = chapters.last() {
-            cumulative_offset += last.end_time_ms;
-        }
+        cumulative_offset += duration_ms;
     }
 
     merged
@@ -654,7 +652,7 @@ mod tests {
             Chapter::new(2, "Part2 Ch2".to_string(), 45_000, 90_000),
         ];
 
-        let merged = merge_chapter_lists(&[chapters1, chapters2]);
+        let merged = merge_chapter_lists(&[(chapters1, 120_000), (chapters2, 90_000)]);
 
         assert_eq!(merged.len(), 4);
         // First file's chapters unchanged
@@ -690,7 +688,7 @@ mod tests {
             Chapter::new(1, "Ch1".to_string(), 0, 1000),
             Chapter::new(2, "Ch2".to_string(), 1000, 2000),
         ];
-        let result = merge_chapter_lists(&[chapters.clone()]);
+        let result = merge_chapter_lists(&[(chapters.clone(), 2_000)]);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].title, "Ch1");
         assert_eq!(result[1].title, "Ch2");

@@ -51,9 +51,19 @@ impl M4bMerger {
 
         // Step 1: Extract chapters from all files
         tracing::info!("Extracting chapters from source files...");
-        let mut all_chapters: Vec<Vec<Chapter>> = Vec::new();
+        let mut chapter_parts: Vec<(Vec<Chapter>, u64)> = Vec::new();
 
         for m4b_file in &m4b_files {
+            // The full media duration is required to position every later
+            // chapter correctly. Continuing without it would knowingly emit
+            // shifted chapter metadata, so a probe failure aborts the merge.
+            let (duration_ms, embedded_title) = self
+                .ffmpeg
+                .probe_duration_and_title(m4b_file)
+                .await
+                .with_context(|| {
+                    format!("Failed to determine duration of {}", m4b_file.display())
+                })?;
             let chapters = match read_m4b_chapters(m4b_file).await {
                 Ok(chapters) => {
                     tracing::debug!(
@@ -73,26 +83,16 @@ impl M4bMerger {
             // whole file as a single chapter so merging incremental (one-file-per-
             // chapter) audiobooks still produces a chapterized output (issue #15).
             let chapters = if chapters.is_empty() {
-                match self.synthesize_file_chapter(m4b_file).await {
-                    Ok(chapter) => vec![chapter],
-                    Err(e) => {
-                        tracing::warn!(
-                            "Could not synthesize a chapter for {}: {}",
-                            m4b_file.display(),
-                            e
-                        );
-                        Vec::new()
-                    }
-                }
+                vec![self.synthesize_file_chapter(m4b_file, duration_ms, embedded_title)]
             } else {
                 chapters
             };
 
-            all_chapters.push(chapters);
+            chapter_parts.push((chapters, duration_ms));
         }
 
         // Merge chapter lists with adjusted timestamps
-        let merged_chapters = merge_chapter_lists(&all_chapters);
+        let merged_chapters = merge_chapter_lists(&chapter_parts);
         tracing::info!("Total merged chapters: {}", merged_chapters.len());
 
         // Step 2: Create concat file for FFmpeg
@@ -146,9 +146,12 @@ impl M4bMerger {
     /// The chapter title is taken from the file's embedded `title` tag, falling
     /// back to the filename stem. The chapter number is provisional — the caller's
     /// `merge_chapter_lists` renumbers chapters sequentially across all files.
-    async fn synthesize_file_chapter(&self, m4b_file: &Path) -> Result<Chapter> {
-        let (duration_ms, embedded_title) = self.ffmpeg.probe_duration_and_title(m4b_file).await?;
-
+    fn synthesize_file_chapter(
+        &self,
+        m4b_file: &Path,
+        duration_ms: u64,
+        embedded_title: Option<String>,
+    ) -> Chapter {
         let title = embedded_title.unwrap_or_else(|| {
             m4b_file
                 .file_stem()
@@ -156,7 +159,7 @@ impl M4bMerger {
                 .unwrap_or_else(|| "Chapter".to_string())
         });
 
-        Ok(Chapter::new(1, title, 0, duration_ms))
+        Chapter::new(1, title, 0, duration_ms)
     }
 
     /// Copy metadata from first source file to output
