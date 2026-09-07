@@ -39,10 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reader parsed `format.duration` as a JSON string only, the same assumption
   that made FLAC sources fail, so a build reporting numeric fields would fail
   when merging. Both readers now accept either shape.
-- **Analyzer re-sorted tracks lexicographically**: after analysis, tracks were
-  re-sorted with a plain path comparison, which places `track10` before `track2`
-  and could silently reorder a book the scanner had already ordered correctly. It
-  now uses the same natural ordering as the scanner.
+- **Analyzer re-sorted tracks lexicographically** (#25): after analysis, tracks
+  were re-sorted with a plain path comparison, which places `track10` before
+  `track2` and could silently reorder a book the scanner had already ordered
+  correctly. The analyzer probes concurrently with `buffer_unordered`, so this
+  sort is what establishes final track order. It now uses the same natural
+  ordering as the scanner. Reported and independently fixed by @JKamsker in #25,
+  which predates this change.
 - **A single unreadable track aborted the whole batch** (#18): one bad file in the
   first book stopped a 60-book run. Unreadable tracks are now skipped with a
   warning; a book is only failed when none of its tracks can be read.
@@ -67,6 +70,9 @@ Thanks to the contributors who reported the bugs fixed in this release:
 - [@virtualistic](https://github.com/virtualistic) — reported the M4B merge ordering bug (#31)
 - [@christopherpross](https://github.com/christopherpross) — reported the library scan abort, with a precise reproduction (#30)
 - [@dkuester](https://github.com/dkuester) — reported the FLAC transcode failure (#18)
+- [@JKamsker](https://github.com/JKamsker) — diagnosed the analyzer track-ordering
+  bug and proposed the same fix in #25, weeks before it was rediscovered and
+  shipped here
 
 ## [2.11.2] - 2026-07-09
 
