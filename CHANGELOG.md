@@ -5,7 +5,7 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.12.0] - 2026-09-08
 
 ### Fixed
 - **`-j` did not limit how many books were processed at once** (#27): the worker
@@ -31,6 +31,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subfolder is a numbered part folder forming a complete `1..n` set, which leaves
   ordinary nested `Author/Book` libraries untouched. Thanks to
   [@JKamsker](https://github.com/JKamsker) for the fix.
+
+### Security
+- **Updated `time`, `bytes` and `anyhow`** to clear three advisories affecting the
+  dependency tree: stack exhaustion parsing RFC 2822 input (RUSTSEC-2026-0009),
+  an integer overflow in `BytesMut::reserve` (RUSTSEC-2026-0007), and unsoundness
+  in `Error::downcast_mut` (RUSTSEC-2026-0190). Lockfile-only, no API changes.
+
+### Internal
+- **CI now runs on every push and pull request**: formatting, clippy and the test
+  suite, plus a separate security workflow (CodeQL, and cargo-deny for advisories,
+  licences, banned crates and source registries) that also runs weekly.
+- **Corrected the documented `-j` range**: the help text said 1-8 while the code
+  clamps to 1-16.
 
 ### Contributors
 - [@JKamsker](https://github.com/JKamsker) — the worker-limit fix (#27), the M4B

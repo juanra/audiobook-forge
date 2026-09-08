@@ -1,6 +1,6 @@
 [package]
 name = "audiobook-forge"
-version = "2.11.3"
+version = "2.12.0"
 edition = "2021"
 authors = ["Audiobook Forge Contributors"]
 license = "MIT"
