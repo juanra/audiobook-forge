@@ -106,7 +106,10 @@ fn default_max_concurrent_files_per_book() -> String {
 /// Processing configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessingConfig {
-    /// Number of parallel workers (1-8)
+    /// Number of audiobooks processed at once (clamped to 1-16).
+    ///
+    /// This is the ceiling: `max_concurrent_encodes` can lower it further but
+    /// never raise it.
     #[serde(default = "default_parallel_workers")]
     pub parallel_workers: u8,
     /// Skip folders with existing M4B files

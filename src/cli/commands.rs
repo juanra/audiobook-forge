@@ -66,7 +66,7 @@ pub struct BuildArgs {
     #[arg(short, long)]
     pub out: Option<PathBuf>,
 
-    /// Number of parallel workers (1-8)
+    /// Number of audiobooks to process at once (clamped to 1-16)
     #[arg(short = 'j', long, value_parser = clap::value_parser!(u8).range(1..=8))]
     pub parallel: Option<u8>,
 
