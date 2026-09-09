@@ -179,7 +179,7 @@ pub fn extract_embedded_cover(file_path: &Path, output_path: &Path) -> Result<bo
         .unwrap_or("");
 
     match extension.to_lowercase().as_str() {
-        "mp3" => extract_mp3_cover_art(file_path, output_path),
+        "mp3" | "wma" => extract_mp3_cover_art(file_path, output_path),
         "m4a" | "m4b" => extract_m4a_cover_art(file_path, output_path),
         _ => {
             tracing::debug!("Unsupported format for cover extraction: {}", extension);

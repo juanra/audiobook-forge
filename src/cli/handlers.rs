@@ -79,7 +79,7 @@ fn try_detect_current_as_audiobook() -> Result<Option<PathBuf>> {
             e.path()
                 .extension()
                 .and_then(|ext| ext.to_str())
-                .map(|ext| ext.eq_ignore_ascii_case("mp3") || ext.eq_ignore_ascii_case("m4a"))
+                .map(|ext| ext.eq_ignore_ascii_case("mp3") || ext.eq_ignore_ascii_case("m4a") || ext.eq_ignore_ascii_case("wma"))
                 .unwrap_or(false)
         })
         .count();
@@ -108,6 +108,7 @@ fn is_audiobook_folder(path: &std::path::Path) -> Result<bool> {
                 .and_then(|ext| ext.to_str())
                 .map(|ext| {
                     ext.eq_ignore_ascii_case("mp3")
+                        || ext.eq_ignore_ascii_case("wma")
                         || ext.eq_ignore_ascii_case("m4a")
                         || ext.eq_ignore_ascii_case("m4b")
                 })

@@ -71,7 +71,7 @@ impl QualityProfile {
         // 4. Codec preference: AAC > MP3
         let codec_priority = |codec: &str| match codec.to_lowercase().as_str() {
             "aac" => 2,
-            "mp3" => 1,
+            "mp3" | "wma" => 1,
             _ => 0,
         };
 

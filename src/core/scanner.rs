@@ -123,7 +123,7 @@ impl Scanner {
                 Some("m4b") => {
                     book.m4b_files.push(file_path);
                 }
-                Some("m4a") | Some("flac") => {
+                Some("m4a") | Some("flac") | Some("wma") => {
                     // These files are treated like MP3s (can be converted)
                     book.mp3_files.push(file_path);
                 }

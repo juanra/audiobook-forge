@@ -68,7 +68,7 @@ impl Track {
 
     /// Check if this is an MP3 file
     pub fn is_mp3(&self) -> bool {
-        matches!(self.get_extension().as_deref(), Some("mp3"))
+        matches!(self.get_extension().as_deref(), Some("mp3" | "wma"))
     }
 
     /// Check if this is an M4A/M4B file
