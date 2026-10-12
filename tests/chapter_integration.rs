@@ -12,7 +12,7 @@ fn test_parse_simple_text_file() {
     writeln!(temp, "Prologue").unwrap();
     writeln!(temp, "Chapter 1: The Beginning").unwrap();
     writeln!(temp, "Chapter 2: The Journey").unwrap();
-    writeln!(temp, "").unwrap(); // Empty line should be ignored
+    writeln!(temp).unwrap(); // Empty line should be ignored
     writeln!(temp, "Epilogue").unwrap();
     temp.flush().unwrap();
 

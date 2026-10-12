@@ -39,7 +39,7 @@ pub fn extract_m4a_metadata(track: &mut Track) -> Result<()> {
     track.album = tag.album().map(|s| s.to_string());
     track.album_artist = tag.album_artist().map(|s| s.to_string());
     track.genre = tag.genre().map(|s| s.to_string());
-    track.year = tag.year().map(|s| s.parse::<u32>().ok()).flatten();
+    track.year = tag.year().and_then(|s| s.parse::<u32>().ok());
     track.comment = tag.comment().map(|s| s.to_string());
     track.composer = tag.composer().map(|s| s.to_string());
 
@@ -162,7 +162,7 @@ pub fn extract_m4a_cover_art(file_path: &Path, output_path: &Path) -> Result<boo
             artwork.data.len()
         );
 
-        std::fs::write(output_path, &artwork.data).context("Failed to write extracted cover")?;
+        std::fs::write(output_path, artwork.data).context("Failed to write extracted cover")?;
 
         Ok(true)
     } else {
@@ -206,6 +206,7 @@ fn artwork_args(cover_art: Option<&Path>) -> Vec<String> {
 }
 
 /// Inject metadata into M4B file using AtomicParsley
+#[allow(clippy::too_many_arguments)] // one optional value per AtomicParsley tag
 pub async fn inject_metadata_atomicparsley(
     file_path: &Path,
     title: Option<&str>,
@@ -222,35 +223,35 @@ pub async fn inject_metadata_atomicparsley(
     cmd.arg(file_path);
 
     if let Some(title) = title {
-        cmd.args(&["--title", title]);
+        cmd.args(["--title", title]);
     }
     if let Some(artist) = artist {
-        cmd.args(&["--artist", artist]);
+        cmd.args(["--artist", artist]);
     }
     if let Some(album) = album {
-        cmd.args(&["--album", album]);
+        cmd.args(["--album", album]);
     }
     if let Some(album_artist) = album_artist {
-        cmd.args(&["--albumArtist", album_artist]);
+        cmd.args(["--albumArtist", album_artist]);
     }
     if let Some(year) = year {
-        cmd.args(&["--year", &year.to_string()]);
+        cmd.args(["--year", &year.to_string()]);
     }
     if let Some(genre) = genre {
-        cmd.args(&["--genre", genre]);
+        cmd.args(["--genre", genre]);
     }
     if let Some(composer) = composer {
-        cmd.args(&["--composer", composer]);
+        cmd.args(["--composer", composer]);
     }
     if let Some(comment) = comment {
         let comment = comment.replace('\0', "");
         if !comment.is_empty() {
-            cmd.args(&["--comment", &comment]);
+            cmd.args(["--comment", &comment]);
         }
     }
     cmd.args(artwork_args(cover_art));
 
-    cmd.args(&["--overWrite"]);
+    cmd.args(["--overWrite"]);
 
     // Log command for debugging
     tracing::debug!("AtomicParsley command: {:?}", cmd.as_std());
@@ -283,25 +284,25 @@ pub async fn inject_audible_metadata(
     } else {
         audible.title.clone()
     };
-    cmd.args(&["--title", &full_title]);
+    cmd.args(["--title", &full_title]);
 
     // Album (use title for audiobooks)
-    cmd.args(&["--album", &audible.title]);
+    cmd.args(["--album", &audible.title]);
 
     // Artist (primary author)
     if let Some(author) = audible.primary_author() {
-        cmd.args(&["--artist", author]);
-        cmd.args(&["--albumArtist", author]);
+        cmd.args(["--artist", author]);
+        cmd.args(["--albumArtist", author]);
     }
 
     // Narrator as composer (audiobook convention)
     if let Some(narrator) = audible.primary_narrator() {
-        cmd.args(&["--composer", narrator]);
+        cmd.args(["--composer", narrator]);
     }
 
     // Subtitle (if present and not already in title)
     if let Some(subtitle) = &audible.subtitle {
-        cmd.args(&["--description", subtitle]);
+        cmd.args(["--description", subtitle]);
     }
 
     // Description/Summary
@@ -312,15 +313,15 @@ pub async fn inject_audible_metadata(
         } else {
             desc.clone()
         };
-        cmd.args(&["--longdesc", &truncated_desc]);
-        cmd.args(&["--comment", &truncated_desc]);
+        cmd.args(["--longdesc", &truncated_desc]);
+        cmd.args(["--comment", &truncated_desc]);
     }
 
     // Publisher
     if let Some(publisher) = &audible.publisher {
-        cmd.args(&[
+        cmd.args([
             "--rDNSatom",
-            &format!("{}", publisher),
+            &publisher.to_string(),
             "name=publisher",
             "domain=com.apple.iTunes",
         ]);
@@ -328,16 +329,16 @@ pub async fn inject_audible_metadata(
 
     // Year
     if let Some(year) = audible.published_year {
-        cmd.args(&["--year", &year.to_string()]);
+        cmd.args(["--year", &year.to_string()]);
     }
 
     // Genre (first genre)
     if let Some(genre) = audible.genres.first() {
-        cmd.args(&["--genre", genre]);
+        cmd.args(["--genre", genre]);
     }
 
     // ASIN as custom atom (for Audiobookshelf)
-    cmd.args(&[
+    cmd.args([
         "--rDNSatom",
         &audible.asin,
         "name=asin",
@@ -348,7 +349,7 @@ pub async fn inject_audible_metadata(
     cmd.args(artwork_args(cover_art));
 
     // Overwrite
-    cmd.args(&["--overWrite"]);
+    cmd.args(["--overWrite"]);
 
     let output = cmd
         .output()

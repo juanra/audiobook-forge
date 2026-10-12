@@ -236,7 +236,7 @@ impl AudibleClient {
                 AudibleApiError::HttpError { status, .. } if status >= 500 => {
                     "\nSuggestion: This is a server error. Try again later or use a different region."
                 }
-                AudibleApiError::HttpError { status, .. } if status == 404 => {
+                AudibleApiError::HttpError { status: 404, .. } => {
                     "\nSuggestion: ASIN not found in this region. Try a different region."
                 }
                 _ => ""
@@ -286,7 +286,7 @@ impl AudibleClient {
                 AudibleApiError::HttpError { status, .. } if status >= 500 => {
                     "\nSuggestion: This is a server error. Try again later or use a different region."
                 }
-                AudibleApiError::HttpError { status, .. } if status == 404 => {
+                AudibleApiError::HttpError { status: 404, .. } => {
                     "\nSuggestion: No chapter data available for this ASIN in this region."
                 }
                 _ => ""
@@ -358,7 +358,7 @@ impl AudibleClient {
                 AudibleApiError::HttpError { status, .. } if status >= 500 => {
                     "\nSuggestion: Audible's API is experiencing issues. Try again later."
                 }
-                AudibleApiError::HttpError { status, .. } if status == 403 => {
+                AudibleApiError::HttpError { status: 403, .. } => {
                     "\nSuggestion: Access forbidden. Check if Audible API has blocked this region/IP."
                 }
                 _ => ""
@@ -683,7 +683,7 @@ mod tests {
         let chapters = client.fetch_chapters("1774248182").await.unwrap();
 
         assert!(!chapters.is_empty());
-        assert!(chapters[0].title.len() > 0);
+        assert!(!chapters[0].title.is_empty());
         assert!(chapters[0].length_ms > 0);
     }
 }

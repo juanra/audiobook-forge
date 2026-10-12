@@ -243,12 +243,13 @@ mod tests {
     use tempfile::tempdir;
 
     fn create_test_config() -> Config {
-        let mut config = Config::default();
-        config.organization = OrganizationConfig {
-            m4b_folder: "M4B".to_string(),
-            convert_folder: "To_Convert".to_string(),
-        };
-        config
+        Config {
+            organization: OrganizationConfig {
+                m4b_folder: "M4B".to_string(),
+                convert_folder: "To_Convert".to_string(),
+            },
+            ..Default::default()
+        }
     }
 
     #[test]

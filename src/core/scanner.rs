@@ -254,14 +254,12 @@ impl Scanner {
                 Some("cue") => {
                     book.cue_file = Some(file_path);
                 }
-                Some("jpg") | Some("png") | Some("jpeg") => {
+                Some("jpg") | Some("png") | Some("jpeg")
                     // Check if this is a cover art file
-                    if book.cover_file.is_none() {
-                        if self.is_cover_art(&file_path) {
+                    if book.cover_file.is_none()
+                        && self.is_cover_art(&file_path) => {
                             book.cover_file = Some(file_path);
                         }
-                    }
-                }
                 _ => {}
             }
         }

@@ -34,13 +34,10 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      # Not yet `-D warnings`: the codebase carries ~70 pre-existing clippy
-      # warnings. This gate blocks clippy *errors* (deny-by-default lints, which
-      # catch real defects) so it is useful from day one; tightening to
-      # `-D warnings` is tracked separately so the cleanup does not have to land
-      # in the same change as turning CI on.
+      # Warnings fail the build; anything kept on purpose carries an
+      # #[allow(...)] with its reason.
       - name: Clippy
-        run: cargo clippy --all-targets
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Test
         run: cargo test --all-targets

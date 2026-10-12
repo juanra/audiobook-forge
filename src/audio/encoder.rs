@@ -40,7 +40,7 @@ impl AacEncoder {
     }
 
     /// Try to parse encoder from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_name(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "aac_at" => Some(Self::AppleSilicon),
             "libfdk_aac" | "libfdk" => Some(Self::LibFdk),
@@ -84,7 +84,7 @@ impl EncoderDetector {
 
     /// Check if a specific encoder is available in FFmpeg
     pub fn is_encoder_available(encoder: AacEncoder) -> bool {
-        let output = Command::new("ffmpeg").args(&["-encoders"]).output();
+        let output = Command::new("ffmpeg").args(["-encoders"]).output();
 
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -121,7 +121,7 @@ static DETECTED_ENCODER: OnceLock<AacEncoder> = OnceLock::new();
 
 /// Get the best available AAC encoder (cached, thread-safe)
 pub fn get_encoder() -> AacEncoder {
-    *DETECTED_ENCODER.get_or_init(|| EncoderDetector::detect_best_encoder())
+    *DETECTED_ENCODER.get_or_init(EncoderDetector::detect_best_encoder)
 }
 
 #[cfg(test)]
@@ -147,17 +147,20 @@ mod tests {
     #[test]
     fn test_encoder_from_str() {
         assert_eq!(
-            AacEncoder::from_str("aac_at"),
+            AacEncoder::from_name("aac_at"),
             Some(AacEncoder::AppleSilicon)
         );
-        assert_eq!(AacEncoder::from_str("libfdk_aac"), Some(AacEncoder::LibFdk));
-        assert_eq!(AacEncoder::from_str("libfdk"), Some(AacEncoder::LibFdk));
-        assert_eq!(AacEncoder::from_str("aac"), Some(AacEncoder::Native));
         assert_eq!(
-            AacEncoder::from_str("AAC_MF"),
+            AacEncoder::from_name("libfdk_aac"),
+            Some(AacEncoder::LibFdk)
+        );
+        assert_eq!(AacEncoder::from_name("libfdk"), Some(AacEncoder::LibFdk));
+        assert_eq!(AacEncoder::from_name("aac"), Some(AacEncoder::Native));
+        assert_eq!(
+            AacEncoder::from_name("AAC_MF"),
             Some(AacEncoder::MediaFoundation)
         );
-        assert_eq!(AacEncoder::from_str("unknown"), None);
+        assert_eq!(AacEncoder::from_name("unknown"), None);
     }
 
     #[test]
@@ -183,7 +186,7 @@ mod tests {
         // Should have at least one encoder (aac is universal)
         assert!(!encoders.is_empty());
         // Native aac should always be available
-        assert!(encoders.contains(&AacEncoder::Native) || encoders.len() > 0);
+        assert!(encoders.contains(&AacEncoder::Native) || !encoders.is_empty());
     }
 
     #[test]

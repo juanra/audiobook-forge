@@ -6,9 +6,10 @@ use std::fmt;
 use std::str::FromStr;
 
 /// Audible region with TLD mapping
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum AudibleRegion {
     #[serde(rename = "us")]
+    #[default]
     US,
     #[serde(rename = "ca")]
     CA,
@@ -90,12 +91,6 @@ impl FromStr for AudibleRegion {
 impl fmt::Display for AudibleRegion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.tld())
-    }
-}
-
-impl Default for AudibleRegion {
-    fn default() -> Self {
-        Self::US
     }
 }
 

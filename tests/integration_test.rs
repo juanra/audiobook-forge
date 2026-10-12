@@ -1,6 +1,6 @@
 //! Integration tests for audiobook-forge
 
-use audiobook_forge::core::{Analyzer, Organizer, Processor, Scanner};
+use audiobook_forge::core::{Organizer, Scanner};
 use audiobook_forge::models::{BookCase, Config};
 use std::fs;
 use std::path::PathBuf;

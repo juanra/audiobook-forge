@@ -179,7 +179,7 @@ impl QualityProfile {
                 codec: "aac".to_string(),
                 duration: source.duration,
             }),
-            "source" | _ => None, // Use auto-detected quality from source
+            _ => None, // "source" or unknown: use auto-detected quality from source
         }
     }
 

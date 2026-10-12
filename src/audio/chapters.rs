@@ -256,7 +256,6 @@ pub async fn verify_chapter_count(m4b_file: &Path, expected: usize) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn test_chapter_creation() {

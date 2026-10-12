@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Main configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
     pub directories: DirectoryConfig,
@@ -22,21 +22,6 @@ pub struct Config {
     pub logging: LoggingConfig,
     #[serde(default)]
     pub advanced: AdvancedConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            directories: DirectoryConfig::default(),
-            performance: PerformanceConfig::default(),
-            processing: ProcessingConfig::default(),
-            quality: QualityConfig::default(),
-            metadata: MetadataConfig::default(),
-            organization: OrganizationConfig::default(),
-            logging: LoggingConfig::default(),
-            advanced: AdvancedConfig::default(),
-        }
-    }
 }
 
 /// Directory configuration
@@ -259,19 +244,15 @@ fn default_auto_extract_cover() -> bool {
 /// Matching mode for interactive metadata matching during build
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum MatchMode {
     /// Disabled - don't match during build
+    #[default]
     Disabled,
     /// Auto - automatically select best match (non-interactive)
     Auto,
     /// Interactive - prompt user for each file
     Interactive,
-}
-
-impl Default for MatchMode {
-    fn default() -> Self {
-        MatchMode::Disabled
-    }
 }
 
 /// Audible metadata integration configuration
@@ -450,7 +431,7 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.processing.parallel_workers, 2);
-        assert_eq!(config.quality.prefer_stereo, true);
+        assert!(config.quality.prefer_stereo);
         assert_eq!(config.metadata.default_language, "es");
     }
 

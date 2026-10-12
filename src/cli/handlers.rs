@@ -19,7 +19,7 @@ use std::str::FromStr;
 fn resolve_encoder(config: &Config, cli_override: Option<&str>) -> AacEncoder {
     // CLI argument takes highest priority
     if let Some(encoder_str) = cli_override {
-        if let Some(encoder) = AacEncoder::from_str(encoder_str) {
+        if let Some(encoder) = AacEncoder::from_name(encoder_str) {
             tracing::info!("Using encoder from CLI argument: {}", encoder.name());
             return encoder;
         } else {
@@ -49,7 +49,7 @@ fn resolve_encoder(config: &Config, cli_override: Option<&str>) -> AacEncoder {
             encoder
         }
         encoder_str => {
-            if let Some(encoder) = AacEncoder::from_str(encoder_str) {
+            if let Some(encoder) = AacEncoder::from_name(encoder_str) {
                 tracing::info!("Using configured encoder: {}", encoder.name());
                 encoder
             } else {
@@ -1298,7 +1298,7 @@ pub async fn handle_match(args: MatchArgs, config: Config) -> Result<()> {
             style(file_path.display()).yellow()
         );
 
-        match process_single_file(&file_path, &args, &client, &cache, &config).await {
+        match process_single_file(file_path, &args, &client, &cache, &config).await {
             Ok(ProcessResult::Applied) => processed += 1,
             Ok(ProcessResult::Skipped) => skipped += 1,
             Err(e) => {
@@ -1327,7 +1327,7 @@ enum ProcessResult {
 
 /// Process a single M4B file
 async fn process_single_file(
-    file_path: &PathBuf,
+    file_path: &std::path::Path,
     args: &MatchArgs,
     client: &AudibleClient,
     _cache: &AudibleCache,
@@ -1483,7 +1483,7 @@ fn get_files_to_process(args: &MatchArgs) -> Result<Vec<PathBuf>> {
 }
 
 /// Check if file is M4B
-fn is_m4b_file(path: &PathBuf) -> bool {
+fn is_m4b_file(path: &std::path::Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| e.eq_ignore_ascii_case("m4b"))
@@ -1511,7 +1511,7 @@ async fn search_audible(
 
 /// Apply metadata to M4B file
 async fn apply_metadata(
-    file_path: &PathBuf,
+    file_path: &std::path::Path,
     metadata: &crate::models::AudibleMetadata,
     args: &MatchArgs,
     config: &Config,

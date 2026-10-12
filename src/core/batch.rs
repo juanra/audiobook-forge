@@ -47,6 +47,7 @@ impl BatchProcessor {
     }
 
     /// Create batch processor with custom options
+    #[allow(clippy::too_many_arguments)] // mirrors independent CLI/config settings
     pub fn with_options(
         workers: usize,
         keep_temp: bool,
@@ -172,6 +173,7 @@ impl BatchProcessor {
     }
 
     /// Process a single book (internal helper)
+    #[allow(clippy::too_many_arguments)] // per-task copies of the batch settings
     async fn process_single_book(
         book: &BookFolder,
         output_dir: &Path,
@@ -204,7 +206,7 @@ impl BatchProcessor {
 
         // Use 50% of CPU cores for parallel processing
         // (reserves cores for FFmpeg itself which is multi-threaded)
-        (cpu_count / 2).max(1).min(8)
+        (cpu_count / 2).clamp(1, 8)
     }
 }
 

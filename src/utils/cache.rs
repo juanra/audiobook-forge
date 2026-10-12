@@ -139,12 +139,10 @@ impl AudibleCache {
     /// Clear all cached metadata
     pub fn clear_all(&self) -> Result<()> {
         if self.cache_dir.exists() {
-            for entry in std::fs::read_dir(&self.cache_dir)? {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
-                        let _ = std::fs::remove_file(&path);
-                    }
+            for entry in std::fs::read_dir(&self.cache_dir)?.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    let _ = std::fs::remove_file(&path);
                 }
             }
             tracing::debug!("Cleared all Audible cache");
@@ -169,14 +167,12 @@ impl AudibleCache {
         let mut total_size = 0u64;
 
         if self.cache_dir.exists() {
-            for entry in std::fs::read_dir(&self.cache_dir)? {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
-                        count += 1;
-                        if let Ok(metadata) = std::fs::metadata(&path) {
-                            total_size += metadata.len();
-                        }
+            for entry in std::fs::read_dir(&self.cache_dir)?.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    count += 1;
+                    if let Ok(metadata) = std::fs::metadata(&path) {
+                        total_size += metadata.len();
                     }
                 }
             }
@@ -206,7 +202,7 @@ impl CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{AudibleAuthor, AudibleSeries};
+    use crate::models::AudibleAuthor;
 
     fn create_test_metadata() -> AudibleMetadata {
         AudibleMetadata {

@@ -277,7 +277,6 @@ pub async fn read_m4b_chapters(m4b_path: &Path) -> Result<Vec<Chapter>> {
 
     #[derive(Debug, Deserialize)]
     struct FfprobeChapter {
-        id: i64,
         #[serde(default)]
         start_time: String,
         #[serde(default)]

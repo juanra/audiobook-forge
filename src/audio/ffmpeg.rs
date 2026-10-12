@@ -78,7 +78,7 @@ impl FFmpeg {
     /// Probe audio file and extract quality information
     pub async fn probe_audio_file(&self, path: &Path) -> Result<QualityProfile> {
         let output = Command::new(&self.ffprobe_path)
-            .args(&[
+            .args([
                 "-v",
                 "quiet",
                 "-print_format",
@@ -170,7 +170,7 @@ impl FFmpeg {
     ) -> Result<()> {
         let mut cmd = Command::new(&self.ffmpeg_path);
 
-        cmd.args(&["-y", "-f", "concat", "-safe", "0", "-i"])
+        cmd.args(["-y", "-f", "concat", "-safe", "0", "-i"])
             .arg(concat_file);
 
         // Skip video streams (embedded cover art in MP3s)
@@ -178,10 +178,10 @@ impl FFmpeg {
 
         if use_copy {
             // Copy mode - no re-encoding
-            cmd.args(&["-c", "copy"]);
+            cmd.args(["-c", "copy"]);
         } else {
             // Transcode mode
-            cmd.args(&[
+            cmd.args([
                 "-c:a",
                 encoder.name(),
                 "-b:a",
@@ -194,12 +194,12 @@ impl FFmpeg {
 
             // Use multiple threads for encoding if encoder supports it
             if encoder.supports_threading() {
-                cmd.args(&["-threads", "0"]); // 0 = auto-detect optimal thread count
+                cmd.args(["-threads", "0"]); // 0 = auto-detect optimal thread count
             }
         }
 
         // Add faststart flag for better streaming
-        cmd.args(&["-movflags", "+faststart"]);
+        cmd.args(["-movflags", "+faststart"]);
         cmd.arg(output_file);
 
         // Log command for debugging
@@ -245,15 +245,15 @@ impl FFmpeg {
     ) -> Result<()> {
         let mut cmd = Command::new(&self.ffmpeg_path);
 
-        cmd.args(&["-y", "-i"]).arg(input_file);
+        cmd.args(["-y", "-i"]).arg(input_file);
 
         // Skip video streams (embedded cover art in MP3s)
         cmd.arg("-vn");
 
         if use_copy {
-            cmd.args(&["-c", "copy"]);
+            cmd.args(["-c", "copy"]);
         } else {
-            cmd.args(&[
+            cmd.args([
                 "-c:a",
                 encoder.name(),
                 "-b:a",
@@ -266,11 +266,11 @@ impl FFmpeg {
 
             // Use multiple threads for encoding if encoder supports it
             if encoder.supports_threading() {
-                cmd.args(&["-threads", "0"]); // 0 = auto-detect optimal thread count
+                cmd.args(["-threads", "0"]); // 0 = auto-detect optimal thread count
             }
         }
 
-        cmd.args(&["-movflags", "+faststart"]);
+        cmd.args(["-movflags", "+faststart"]);
         cmd.arg(output_file);
 
         // Log command for debugging

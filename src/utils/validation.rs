@@ -134,7 +134,7 @@ impl DependencyChecker {
     /// Check if Apple Silicon AAC encoder is available
     pub fn check_aac_at_support() -> bool {
         // Check if ffmpeg supports aac_at encoder
-        let output = Command::new("ffmpeg").args(&["-encoders"]).output();
+        let output = Command::new("ffmpeg").args(["-encoders"]).output();
 
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout);
