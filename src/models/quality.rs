@@ -102,20 +102,31 @@ impl QualityProfile {
     /// AAC target for a mono lossless source, in kbps.
     pub const LOSSLESS_AAC_TARGET_MONO: u32 = 128;
 
-    /// The bitrate this profile should actually be encoded at.
+    /// Most channels an audiobook is written with; surround is downmixed.
+    pub const MAX_OUTPUT_CHANNELS: u8 = 2;
+
+    /// The profile this source should actually be encoded at.
     ///
-    /// Lossy sources keep their own bitrate (transcoding to a higher one only
-    /// wastes space). Lossless sources probe at 900-1000+ kbps, which AAC
-    /// cannot meaningfully use; mirroring that produced enormous output files
-    /// at a nonsensical bitrate (issue #18), so they are clamped to a sane
-    /// perceptual target instead.
+    /// Surround sources are downmixed to stereo: an audiobook is speech, and
+    /// many players handle multichannel AAC poorly (issue #32). A downmixed
+    /// lossy source keeps its per-channel bitrate rather than spending a 5.1
+    /// budget on two channels.
+    ///
+    /// Lossy sources otherwise keep their own bitrate (transcoding to a higher
+    /// one only wastes space). Lossless sources probe at 900-1000+ kbps, which
+    /// AAC cannot meaningfully use; mirroring that produced enormous output
+    /// files at a nonsensical bitrate (issue #18), so they are clamped to a
+    /// sane perceptual target for the channels actually written.
     pub fn to_encode_target(&self) -> QualityProfile {
+        let channels = self.channels.min(Self::MAX_OUTPUT_CHANNELS);
         let bitrate = if self.is_lossless() {
-            if self.channels == 1 {
+            if channels == 1 {
                 Self::LOSSLESS_AAC_TARGET_MONO
             } else {
                 Self::LOSSLESS_AAC_TARGET_STEREO
             }
+        } else if channels < self.channels {
+            self.bitrate * u32::from(channels) / u32::from(self.channels)
         } else {
             self.bitrate
         };
@@ -123,7 +134,7 @@ impl QualityProfile {
         QualityProfile {
             bitrate,
             sample_rate: self.sample_rate,
-            channels: self.channels,
+            channels,
             codec: self.codec.clone(),
             duration: self.duration,
         }
@@ -198,6 +209,21 @@ impl fmt::Display for QualityProfile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_surround_source_is_downmixed_to_stereo() {
+        // Issue #32: a 5.1 FLAC must be written as stereo at the stereo target.
+        let flac = QualityProfile::new(4000, 48000, 6, "flac".to_string(), 60.0).unwrap();
+        let target = flac.apply_preset(None);
+        assert_eq!(target.channels, 2);
+        assert_eq!(target.bitrate, QualityProfile::LOSSLESS_AAC_TARGET_STEREO);
+
+        // A lossy 5.1 source keeps its per-channel bitrate.
+        let aac = QualityProfile::new(384, 48000, 6, "aac".to_string(), 60.0).unwrap();
+        let target = aac.apply_preset(Some("source"));
+        assert_eq!(target.channels, 2);
+        assert_eq!(target.bitrate, 128);
+    }
 
     #[test]
     fn test_lossless_source_is_clamped_to_sane_aac_target() {

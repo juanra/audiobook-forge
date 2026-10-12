@@ -157,6 +157,11 @@ impl BookFolder {
             return false;
         }
 
+        // Surround must be re-encoded to be downmixed to stereo (issue #32).
+        if self.tracks[0].quality.channels > QualityProfile::MAX_OUTPUT_CHANNELS {
+            return false;
+        }
+
         if self.tracks.len() <= 1 {
             return true;
         }
@@ -323,6 +328,12 @@ mod tests {
             Track::new(PathBuf::from("1.flac"), flac_quality1),
             Track::new(PathBuf::from("2.flac"), flac_quality2),
         ];
+
+        assert!(!book.can_use_concat_copy());
+
+        // Surround AAC must be re-encoded so it can be downmixed (issue #32).
+        let surround = QualityProfile::new(384, 48000, 6, "aac".to_string(), 3600.0).unwrap();
+        book.tracks = vec![Track::new(PathBuf::from("1.m4a"), surround)];
 
         assert!(!book.can_use_concat_copy());
 
