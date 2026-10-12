@@ -5,6 +5,58 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Books could silently overwrite each other** (#37): a book whose tracks sit in a
+  generic subfolder (`Book One/MP3/`) was named after that subfolder, so two such
+  books both produced `MP3.m4b` and the second replaced the first while the run
+  reported success. Books are now named after their own folder when their only
+  audio subfolder is generic (`MP3`, `Audio`, `CD 1`, ...), and any books that
+  would still share an output name fail up front with a message naming both
+  folders, before anything is written. Same-named books also no longer share a
+  temp directory. Disc folders are now folded when they share a prefix
+  (`Title - Disc 01`) or are bare numbers (`01`, `02`), as long as they form a
+  complete `1..n` set.
+- **Books with more than 255 tracks lost most of their chapters** (#35): chapters
+  were written with `MP4Box -chap`, whose one-byte count wrapped (300 tracks became
+  44 chapters, the last one covering the rest of the book). Chapters are now
+  injected with ffmpeg, which writes every chapter, and the count is read back
+  from the finished file: a mismatch fails the book instead of reporting success.
+  This also makes chapters visible in Apple Books, which ignores the atom MP4Box
+  wrote. See `docs/adr/0001-chapter-injection-with-ffmpeg.md`.
+- **Merging M4B parts with different formats produced a mistimed file** (#29): the
+  merger now checks sample rate, channels and codec across parts before a lossless
+  concat and refuses the merge with a clear message on a mismatch. Thanks to
+  [@JKamsker](https://github.com/JKamsker) for the fix.
+- **Surround sources failed, or would have produced a surround audiobook** (#32):
+  multichannel sources are now accepted and downmixed to stereo, and the lossless
+  bitrate target follows the channels actually written.
+
+### Added
+- **`--aac-encoder aac_mf`** (#36): the Windows Media Foundation AAC encoder can be
+  selected explicitly. It is not auto-detected yet, because Media Foundation
+  documents only 44.1/48 kHz and 96-192 kbps.
+
+### Security
+- **Upgraded `reqwest` to 0.12** (#34), clearing the `h2` denial-of-service
+  advisory (RUSTSEC-2026-0258) and dropping the unmaintained `rustls-pemfile`.
+
+### Internal
+- **Clippy warnings now fail CI** (#33), after clearing the backlog.
+- **`RUSTSEC-2024-0449` is ignored for now**: `unsafe-libyaml`, pulled in by the
+  deprecated `serde_yaml`, started failing `cargo deny`. Replacing the YAML crate
+  is tracked separately.
+
+### Contributors
+- [@JKamsker](https://github.com/JKamsker): the M4B stream compatibility check (#29)
+- [@AlexIllinois2](https://github.com/AlexIllinois2): the ffmetadata chapter writer
+  now used for chapter injection (from #19)
+
+### Reported by
+- [@christopherpross](https://github.com/christopherpross): the overwritten books
+  (#37), the lost chapters (#35) and the Media Foundation encoder (#36)
+
 ## [2.12.0] - 2026-09-08
 
 ### Fixed
