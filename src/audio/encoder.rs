@@ -10,6 +10,12 @@ pub enum AacEncoder {
     LibFdk,
     /// FFmpeg native AAC encoder (aac) - universal fallback
     Native,
+    /// Windows Media Foundation encoder (aac_mf) - Windows only, opt-in.
+    ///
+    /// Not auto-detected yet: Media Foundation documents only 44.1/48 kHz and
+    /// 96-192 kbps, which the `low` preset and high source bitrates fall
+    /// outside of (issue #36).
+    MediaFoundation,
 }
 
 impl AacEncoder {
@@ -19,15 +25,17 @@ impl AacEncoder {
             Self::AppleSilicon => "aac_at",
             Self::LibFdk => "libfdk_aac",
             Self::Native => "aac",
+            Self::MediaFoundation => "aac_mf",
         }
     }
 
     /// Returns whether this encoder benefits from multi-threading
     pub fn supports_threading(&self) -> bool {
         match self {
-            Self::AppleSilicon => false, // Hardware encoder, no threading needed
-            Self::LibFdk => false,       // Single-threaded by design
-            Self::Native => true,        // Benefits from multi-threading
+            Self::AppleSilicon => false,    // Hardware encoder, no threading needed
+            Self::LibFdk => false,          // Single-threaded by design
+            Self::Native => true,           // Benefits from multi-threading
+            Self::MediaFoundation => false, // System encoder, threads itself
         }
     }
 
@@ -37,6 +45,7 @@ impl AacEncoder {
             "aac_at" => Some(Self::AppleSilicon),
             "libfdk_aac" | "libfdk" => Some(Self::LibFdk),
             "aac" => Some(Self::Native),
+            "aac_mf" => Some(Self::MediaFoundation),
             _ => None,
         }
     }
@@ -79,12 +88,12 @@ impl EncoderDetector {
 
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            // Look for the encoder name in the output
-            // Format: " A..... encodername     Description"
+            // Format: " A....D encodername     Description". Match the name
+            // field exactly: a substring test made `aac` match `aac_mf` lines.
             stdout.lines().any(|line| {
-                let trimmed = line.trim_start();
-                // Check if it's an audio encoder line and contains our encoder name
-                trimmed.starts_with('A') && line.contains(encoder.name())
+                let mut fields = line.split_whitespace();
+                fields.next().is_some_and(|flags| flags.starts_with('A'))
+                    && fields.next() == Some(encoder.name())
             })
         } else {
             false
@@ -97,6 +106,7 @@ impl EncoderDetector {
             AacEncoder::AppleSilicon,
             AacEncoder::LibFdk,
             AacEncoder::Native,
+            AacEncoder::MediaFoundation,
         ];
 
         all_encoders
@@ -123,6 +133,7 @@ mod tests {
         assert_eq!(AacEncoder::AppleSilicon.name(), "aac_at");
         assert_eq!(AacEncoder::LibFdk.name(), "libfdk_aac");
         assert_eq!(AacEncoder::Native.name(), "aac");
+        assert_eq!(AacEncoder::MediaFoundation.name(), "aac_mf");
     }
 
     #[test]
@@ -130,6 +141,7 @@ mod tests {
         assert!(!AacEncoder::AppleSilicon.supports_threading());
         assert!(!AacEncoder::LibFdk.supports_threading());
         assert!(AacEncoder::Native.supports_threading());
+        assert!(!AacEncoder::MediaFoundation.supports_threading());
     }
 
     #[test]
@@ -141,6 +153,10 @@ mod tests {
         assert_eq!(AacEncoder::from_str("libfdk_aac"), Some(AacEncoder::LibFdk));
         assert_eq!(AacEncoder::from_str("libfdk"), Some(AacEncoder::LibFdk));
         assert_eq!(AacEncoder::from_str("aac"), Some(AacEncoder::Native));
+        assert_eq!(
+            AacEncoder::from_str("AAC_MF"),
+            Some(AacEncoder::MediaFoundation)
+        );
         assert_eq!(AacEncoder::from_str("unknown"), None);
     }
 

@@ -424,7 +424,7 @@ pub struct AdvancedConfig {
     /// Use Apple Silicon hardware encoder (aac_at)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_apple_silicon_encoder: Option<bool>,
-    /// AAC encoder preference: "auto", "aac_at", "libfdk_aac", "aac"
+    /// AAC encoder preference: "auto", "aac_at", "libfdk_aac", "aac", "aac_mf"
     #[serde(default = "default_aac_encoder")]
     pub aac_encoder: String,
 }

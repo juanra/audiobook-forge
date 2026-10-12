@@ -118,7 +118,7 @@ pub struct BuildArgs {
     #[arg(long, value_parser = ["low", "medium", "high", "ultra", "maximum", "source"])]
     pub quality: Option<String>,
 
-    /// AAC encoder to use (auto, aac_at, libfdk_aac, aac)
+    /// AAC encoder to use (auto, aac_at, libfdk_aac, aac, aac_mf)
     #[arg(long)]
     pub aac_encoder: Option<String>,
 

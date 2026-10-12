@@ -138,6 +138,8 @@ advanced:
   #   - "aac_at": Apple Silicon hardware encoder (macOS with Apple Silicon only)
   #   - "libfdk_aac": High-quality Fraunhofer AAC encoder (requires FFmpeg build with libfdk-aac)
   #   - "aac": FFmpeg native AAC encoder (universal fallback, available on all platforms)
+  #   - "aac_mf": Windows Media Foundation encoder (Windows only, never auto-selected;
+  #     supports 44.1/48 kHz and 96-192 kbps only)
   # Priority order: aac_at → libfdk_aac → aac
   aac_encoder: "auto"
 
