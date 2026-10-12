@@ -57,34 +57,9 @@ impl DependencyChecker {
         }
     }
 
-    /// Check if MP4Box is installed
-    pub fn check_mp4box() -> DependencyStatus {
-        match which("MP4Box") {
-            Ok(path) => {
-                let version = Self::get_mp4box_version();
-                DependencyStatus {
-                    name: "MP4Box".to_string(),
-                    found: true,
-                    version,
-                    path: Some(path.display().to_string()),
-                }
-            }
-            Err(_) => DependencyStatus {
-                name: "MP4Box".to_string(),
-                found: false,
-                version: None,
-                path: None,
-            },
-        }
-    }
-
     /// Check all dependencies
     pub fn check_all() -> Vec<DependencyStatus> {
-        vec![
-            Self::check_ffmpeg(),
-            Self::check_atomic_parsley(),
-            Self::check_mp4box(),
-        ]
+        vec![Self::check_ffmpeg(), Self::check_atomic_parsley()]
     }
 
     /// Check if all dependencies are satisfied
@@ -116,18 +91,6 @@ impl DependencyChecker {
             .lines()
             .find(|line| line.contains("version"))
             .and_then(|line| line.split_whitespace().last())
-            .map(|s| s.to_string())
-    }
-
-    /// Get MP4Box version
-    fn get_mp4box_version() -> Option<String> {
-        let output = Command::new("MP4Box").arg("-version").output().ok()?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        stdout
-            .lines()
-            .next()
-            .and_then(|line| line.split_whitespace().find(|s| s.contains("version")))
             .map(|s| s.to_string())
     }
 
@@ -182,7 +145,7 @@ mod tests {
     #[test]
     fn test_check_dependencies() {
         let deps = DependencyChecker::check_all();
-        assert_eq!(deps.len(), 3);
+        assert_eq!(deps.len(), 2);
 
         // At least ffmpeg should be found for tests to pass
         let ffmpeg = deps.iter().find(|d| d.name == "ffmpeg");

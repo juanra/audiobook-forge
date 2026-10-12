@@ -72,17 +72,17 @@ Audiobook Forge wraps these tools — install them first:
 
 **macOS:**
 ```bash
-brew install ffmpeg atomicparsley gpac
+brew install ffmpeg atomicparsley
 ```
 
 **Ubuntu/Debian:**
 ```bash
-sudo apt install ffmpeg atomicparsley gpac
+sudo apt install ffmpeg atomicparsley
 ```
 
 **Fedora/RHEL:**
 ```bash
-sudo dnf install ffmpeg atomicparsley gpac
+sudo dnf install ffmpeg atomicparsley
 ```
 
 ### 2. Install Audiobook Forge

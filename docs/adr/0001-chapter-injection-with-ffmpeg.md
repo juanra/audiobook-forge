@@ -49,5 +49,5 @@ generated. A silent loss can no longer be reported as success.
   count with the tail collapsed into the last chapter.
 - Chapter injection remuxes the file once (stream copy, no re-encode), written
   to a temp file beside the target and renamed into place.
-- MP4Box is no longer invoked by any code path. Whether to drop it from
-  `check` and the install instructions is a separate decision.
+- MP4Box (gpac) is no longer a dependency: it is gone from `check`, the config
+  (`advanced.mp4box_path`, now ignored if present) and the install instructions.

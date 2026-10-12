@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   multichannel sources are now accepted and downmixed to stereo, and the lossless
   bitrate target follows the channels actually written.
 
+### Removed
+- **MP4Box (gpac) is no longer required**: nothing invokes it after the chapter
+  change above, so `check` no longer looks for it and `advanced.mp4box_path` is
+  dropped from the config (an existing value is ignored).
+
 ### Added
 - **`--aac-encoder aac_mf`** (#36): the Windows Media Foundation AAC encoder can be
   selected explicitly. It is not auto-detected yet, because Media Foundation

@@ -126,9 +126,6 @@ advanced:
   # Custom path to AtomicParsley binary (auto-detected if null)
   atomic_parsley_path: null
 
-  # Custom path to MP4Box binary (auto-detected if null)
-  mp4box_path: null
-
   # Custom directory for temporary files (system temp if null)
   temp_directory: null
 

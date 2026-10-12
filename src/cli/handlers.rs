@@ -868,7 +868,6 @@ pub fn handle_check() -> Result<()> {
             "AtomicParsley",
             DependencyChecker::check_atomic_parsley().found,
         ),
-        ("MP4Box", DependencyChecker::check_mp4box().found),
     ];
 
     let all_found = results.iter().all(|(_, found)| *found);
@@ -912,8 +911,8 @@ pub fn handle_check() -> Result<()> {
     } else {
         println!("{} Some dependencies are missing", style("✗").red());
         println!("\nInstall missing dependencies:");
-        println!("  macOS:   brew install ffmpeg atomicparsley gpac");
-        println!("  Ubuntu:  apt install ffmpeg atomicparsley gpac");
+        println!("  macOS:   brew install ffmpeg atomicparsley");
+        println!("  Ubuntu:  apt install ffmpeg atomicparsley");
     }
 
     Ok(())

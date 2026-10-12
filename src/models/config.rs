@@ -397,8 +397,6 @@ pub struct AdvancedConfig {
     pub ffmpeg_path: Option<PathBuf>,
     /// Custom AtomicParsley binary path
     pub atomic_parsley_path: Option<PathBuf>,
-    /// Custom MP4Box binary path
-    pub mp4box_path: Option<PathBuf>,
     /// Custom temporary files location
     pub temp_directory: Option<PathBuf>,
     /// DEPRECATED: Use aac_encoder instead
@@ -415,7 +413,6 @@ impl Default for AdvancedConfig {
         Self {
             ffmpeg_path: None,
             atomic_parsley_path: None,
-            mp4box_path: None,
             temp_directory: None,
             use_apple_silicon_encoder: None,
             aac_encoder: default_aac_encoder(),

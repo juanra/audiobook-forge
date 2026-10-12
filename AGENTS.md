@@ -195,10 +195,10 @@ The application requires these external tools to be installed:
 
 ```bash
 # macOS
-brew install ffmpeg atomicparsley gpac
+brew install ffmpeg atomicparsley
 
 # Ubuntu/Debian
-apt install ffmpeg atomicparsley gpac
+apt install ffmpeg atomicparsley
 ```
 
 Validation: Use `audiobook-forge check` to verify installation.
@@ -357,7 +357,7 @@ test(quality): add compatibility check tests
 - Profile with release build, not debug
 
 **Metadata extraction fails**:
-- Ensure `atomicparsley` and `MP4Box` are installed
+- Ensure `atomicparsley` is installed
 - Check file permissions
 - Verify audio files are not corrupted
 
