@@ -49,9 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 - **Clippy warnings now fail CI** (#33), after clearing the backlog.
-- **`RUSTSEC-2024-0449` is ignored for now**: `unsafe-libyaml`, pulled in by the
-  deprecated `serde_yaml`, started failing `cargo deny`. Replacing the YAML crate
-  is tracked separately.
+- **Replaced the deprecated `serde_yaml` with `yaml_serde`**, the fork maintained
+  by the YAML organization. This clears RUSTSEC-2024-0449 (unmaintained
+  `unsafe-libyaml`) with no change to how config files are read or written.
 
 ### Contributors
 - [@JKamsker](https://github.com/JKamsker): the M4B stream compatibility check (#29)

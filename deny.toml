@@ -7,9 +7,6 @@ ignore = [
     # Unmaintained crates, not exploitable on their own and with no safe
     # upgrade today.
     "RUSTSEC-2025-0119", # number_prefix, via indicatif
-    # unsafe-libyaml, via the deprecated serde_yaml. Fixing it means moving the
-    # config parser to a maintained YAML crate, tracked separately.
-    "RUSTSEC-2024-0449",
 ]
 
 [licenses]

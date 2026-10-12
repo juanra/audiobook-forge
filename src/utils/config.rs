@@ -176,6 +176,30 @@ mod tests {
     }
 
     #[test]
+    fn test_template_parses() {
+        let template = include_str!("../../templates/config.yaml");
+        let config: Config = serde_yaml::from_str(template).unwrap();
+        assert_eq!(config.advanced.aac_encoder, "auto");
+    }
+
+    #[test]
+    fn test_legacy_config_with_removed_keys_loads() {
+        // Configs written before MP4Box was dropped still carry mp4box_path.
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("config.yaml");
+        let mut yaml = serde_yaml::to_string(&Config::default()).unwrap();
+        yaml = yaml.replace(
+            "advanced:\n",
+            "advanced:\n  mp4box_path: /opt/homebrew/bin/MP4Box\n",
+        );
+        assert!(yaml.contains("mp4box_path"));
+        fs::write(&config_path, yaml).unwrap();
+
+        let loaded = ConfigManager::load(&config_path).unwrap();
+        assert_eq!(loaded.processing.parallel_workers, 2);
+    }
+
+    #[test]
     fn test_validate_config() {
         let mut config = Config::default();
         config.processing.parallel_workers = 10; // Invalid
