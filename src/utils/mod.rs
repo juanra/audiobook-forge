@@ -11,7 +11,8 @@ mod validation;
 pub use cache::{AudibleCache, CacheStats};
 pub use config::ConfigManager;
 pub use merge_patterns::{
-    are_sequential_part_directories, detect_merge_pattern, MergePatternResult, MergePatternType,
+    are_sequential_part_directories, detect_merge_pattern, is_generic_container_directory,
+    MergePatternResult, MergePatternType,
 };
 pub use sorting::{natural_sort, natural_sort_by};
 pub use validation::DependencyChecker;

@@ -145,9 +145,22 @@ impl Scanner {
             }
         }
 
-        if !parent_has_audio && crate::utils::are_sequential_part_directories(&child_directories) {
-            for child_path in child_directories {
-                self.scan_files_in_directory(&mut book, &child_path)?;
+        if !parent_has_audio {
+            if crate::utils::are_sequential_part_directories(&child_directories) {
+                for child_path in child_directories {
+                    self.scan_files_in_directory(&mut book, &child_path)?;
+                }
+            } else if let [only_audio_child] = Self::directories_with_audio(&child_directories)[..]
+            {
+                // `Book One/MP3` is one book named after `Book One`; otherwise the
+                // walker would emit it as a book called `MP3` (issue #37).
+                let is_generic = only_audio_child
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(crate::utils::is_generic_container_directory);
+                if is_generic {
+                    self.scan_files_in_directory(&mut book, only_audio_child)?;
+                }
             }
         }
 
@@ -255,6 +268,21 @@ impl Scanner {
         Ok(())
     }
 
+    /// The directories that directly contain at least one audio track.
+    fn directories_with_audio(directories: &[std::path::PathBuf]) -> Vec<&Path> {
+        directories
+            .iter()
+            .filter(|directory| {
+                std::fs::read_dir(directory).is_ok_and(|entries| {
+                    entries
+                        .flatten()
+                        .any(|entry| is_audio_track_file(&entry.path()))
+                })
+            })
+            .map(|directory| directory.as_path())
+            .collect()
+    }
+
     /// Check if a path is hidden (starts with .)
     fn is_hidden(&self, path: &Path) -> bool {
         path.file_name()
@@ -342,5 +370,52 @@ mod tests {
 
         // Hidden directory should be skipped
         assert_eq!(books.len(), 0);
+    }
+    fn write_tracks(directory: &Path) {
+        fs::create_dir_all(directory).unwrap();
+        fs::write(directory.join("01.mp3"), b"fake mp3 data").unwrap();
+        fs::write(directory.join("02.mp3"), b"fake mp3 data").unwrap();
+    }
+
+    fn scanned_names(root: &Path) -> Vec<String> {
+        let mut names: Vec<String> = Scanner::new()
+            .scan_directory(root)
+            .unwrap()
+            .into_iter()
+            .map(|book| book.name)
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn test_generic_subfolder_is_named_after_book_folder() {
+        // Issue #37: two books with tracks under `MP3/` must not both be `MP3`.
+        let dir = tempdir().unwrap();
+        write_tracks(&dir.path().join("Book One").join("MP3"));
+        write_tracks(&dir.path().join("Book Two").join("Audio"));
+        fs::create_dir_all(dir.path().join("Book Two").join("Extras")).unwrap();
+
+        assert_eq!(scanned_names(dir.path()), vec!["Book One", "Book Two"]);
+    }
+
+    #[test]
+    fn test_author_title_layout_keeps_title_name() {
+        let dir = tempdir().unwrap();
+        write_tracks(&dir.path().join("Brandon Sanderson").join("Elantris"));
+
+        assert_eq!(scanned_names(dir.path()), vec!["Elantris"]);
+    }
+
+    #[test]
+    fn test_prefixed_disc_folders_fold_into_one_book() {
+        let dir = tempdir().unwrap();
+        write_tracks(&dir.path().join("Title").join("Title - Disc 01"));
+        write_tracks(&dir.path().join("Title").join("Title - Disc 02"));
+
+        let books = Scanner::new().scan_directory(dir.path()).unwrap();
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].name, "Title");
+        assert_eq!(books[0].mp3_files.len(), 4);
     }
 }

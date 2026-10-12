@@ -202,15 +202,14 @@ impl M4bMerger {
 
     /// Create temporary directory
     fn create_temp_dir(&self, book_name: &str) -> Result<PathBuf> {
-        let temp_base = std::env::temp_dir();
+        // Unique per call: two books with the same name processed in parallel
+        // must not share (and wipe) each other's intermediate files (issue #37).
         let sanitized_name = sanitize_filename::sanitize(book_name);
-        let temp_dir = temp_base.join(format!("audiobook-forge-merge-{}", sanitized_name));
-
-        if temp_dir.exists() {
-            std::fs::remove_dir_all(&temp_dir).ok();
-        }
-
-        std::fs::create_dir_all(&temp_dir).context("Failed to create temp directory")?;
+        let temp_dir = tempfile::Builder::new()
+            .prefix(&format!("audiobook-forge-merge-{}-", sanitized_name))
+            .tempdir()
+            .context("Failed to create temp directory")?
+            .keep();
 
         Ok(temp_dir)
     }

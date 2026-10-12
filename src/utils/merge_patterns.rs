@@ -131,39 +131,79 @@ fn check_pattern_match(files: &[&Path], regex: &Regex) -> Option<String> {
 
 /// Check whether every directory is a sequential disc/part directory.
 ///
-/// Recognized names include `CD1`, `Disc 2`, `Disk3`, `Part 4`, and `Pt. 5`.
-/// Requiring a complete sequential set avoids folding ordinary nested library
-/// layouts such as `Author/Book One` and `Author/Book Two` into one book.
+/// Recognized names include `CD1`, `Disc 2`, `Disk3`, `Part 4` and `Pt. 5`, the
+/// same wording behind a prefix shared by every sibling (`Title - Disc 01`,
+/// `Book X CD 2`), and bare numbers (`01`, `02`). Requiring a complete `1..n`
+/// set avoids folding ordinary nested library layouts such as
+/// `Author/Book One` and `Author/Book Two` into one book, and requiring the
+/// disc wording behind a prefix keeps `Series 1`/`Series 2` as separate books.
 pub fn are_sequential_part_directories(directories: &[std::path::PathBuf]) -> bool {
     if directories.len() < 2 {
         return false;
     }
 
-    lazy_static::lazy_static! {
-        static ref PART_DIRECTORY_REGEX: Regex = Regex::new(
-            r"(?i)^(?:part|pt\.?|disc|disk|cd)\s*(\d+)$"
-        ).unwrap();
-    }
-
+    let mut keys = Vec::with_capacity(directories.len());
     let mut numbers = Vec::with_capacity(directories.len());
     for directory in directories {
-        let Some(name) = directory.file_name().and_then(|name| name.to_str()) else {
-            return false;
-        };
-        let Some(captures) = PART_DIRECTORY_REGEX.captures(name) else {
-            return false;
-        };
-        let Some(number) = captures
-            .get(1)
-            .and_then(|value| value.as_str().parse::<u32>().ok())
+        let Some((key, number)) = directory
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(parse_part_directory_name)
         else {
             return false;
         };
+        keys.push(key);
         numbers.push(number);
+    }
+
+    // Siblings must share one shape: all bare numbers, or all the same prefix.
+    if keys.windows(2).any(|pair| pair[0] != pair[1]) {
+        return false;
     }
 
     numbers.sort_unstable();
     numbers == (1..=directories.len() as u32).collect::<Vec<_>>()
+}
+
+/// Split a disc/part directory name into a comparison key and its number.
+///
+/// The key is the normalized prefix before the disc wording (empty for `CD 1`),
+/// or a sentinel for bare numbers so they never match a prefixed sibling.
+fn parse_part_directory_name(name: &str) -> Option<(String, u32)> {
+    lazy_static::lazy_static! {
+        static ref PART_DIRECTORY_REGEX: Regex = Regex::new(
+            r"(?i)^(.*?)\b(?:part|pt\.?|disc|disk|cd)\s*(\d+)$"
+        ).unwrap();
+        static ref NUMBER_DIRECTORY_REGEX: Regex = Regex::new(r"^(\d+)$").unwrap();
+    }
+
+    if let Some(captures) = NUMBER_DIRECTORY_REGEX.captures(name) {
+        let number = captures[1].parse().ok()?;
+        return Some(("#".to_string(), number));
+    }
+
+    let captures = PART_DIRECTORY_REGEX.captures(name)?;
+    let prefix = captures[1]
+        .trim_end_matches(|c: char| c.is_whitespace() || matches!(c, '-' | '_' | '.' | ','))
+        .to_lowercase();
+    let number = captures[2].parse().ok()?;
+    Some((prefix, number))
+}
+
+/// Whether a directory name is a generic audio container rather than a title.
+///
+/// Used when a book folder holds no audio itself and its tracks sit in a single
+/// subfolder: `Book One/MP3` is named after `Book One`, while `Author/Title`
+/// keeps `Title` (issue #37). A lone disc folder (`CD 1`) counts as generic too.
+pub fn is_generic_container_directory(name: &str) -> bool {
+    lazy_static::lazy_static! {
+        static ref GENERIC_DIRECTORY_REGEX: Regex = Regex::new(
+            r"(?i)^(?:mp3|m4a|m4b|aac|flac|ogg|audio|audiobook|files|tracks)$"
+        ).unwrap();
+    }
+
+    GENERIC_DIRECTORY_REGEX.is_match(name.trim())
+        || parse_part_directory_name(name.trim()).is_some_and(|(key, _)| key.is_empty())
 }
 
 #[cfg(test)]
@@ -231,5 +271,51 @@ mod tests {
             std::path::PathBuf::from("Book Two"),
         ];
         assert!(!are_sequential_part_directories(&book_directories));
+    }
+
+    fn dirs(names: &[&str]) -> Vec<std::path::PathBuf> {
+        names.iter().map(std::path::PathBuf::from).collect()
+    }
+
+    #[test]
+    fn test_sequential_part_directories_with_shared_prefix() {
+        assert!(are_sequential_part_directories(&dirs(&[
+            "Book X CD 1",
+            "Book X CD 2"
+        ])));
+        assert!(are_sequential_part_directories(&dirs(&[
+            "Title - Disc 01",
+            "Title - Disc 02"
+        ])));
+        // Different prefixes are different books.
+        assert!(!are_sequential_part_directories(&dirs(&[
+            "Book X CD 1",
+            "Book Y CD 2"
+        ])));
+        // A number without disc wording is a series, not a disc set.
+        assert!(!are_sequential_part_directories(&dirs(&[
+            "Series 1", "Series 2"
+        ])));
+        // The keyword must be a whole word.
+        assert!(!are_sequential_part_directories(&dirs(&[
+            "Abcd 1", "Abcd 2"
+        ])));
+    }
+
+    #[test]
+    fn test_sequential_part_directories_bare_numbers() {
+        assert!(are_sequential_part_directories(&dirs(&["01", "02", "03"])));
+        assert!(!are_sequential_part_directories(&dirs(&["01", "03"])));
+        assert!(!are_sequential_part_directories(&dirs(&["01", "CD 2"])));
+    }
+
+    #[test]
+    fn test_generic_container_directory() {
+        for name in ["MP3", "Audio", "flac", "CD 1", "Disc1"] {
+            assert!(is_generic_container_directory(name), "{name}");
+        }
+        for name in ["Elantris", "Edición 2005", "Book X CD 1"] {
+            assert!(!is_generic_container_directory(name), "{name}");
+        }
     }
 }

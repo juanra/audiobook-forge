@@ -193,7 +193,25 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
         }
     }
 
-    if book_folders.is_empty() {
+    // Every book in a run writes into the same output directory, so two books
+    // with the same output name would silently overwrite each other (issue #37).
+    // Fail them all up front rather than guess which one the user wanted.
+    let (unique_books, colliding_books) = split_output_collisions(book_folders);
+    book_folders = unique_books;
+    let collision_results: Vec<ProcessingResult> = colliding_books
+        .iter()
+        .map(|book| {
+            let message = format!(
+                "Output name '{}' is shared with another book in this run ({}); rename one of the folders",
+                book.get_output_filename(),
+                book.folder_path.display()
+            );
+            println!("  {} {} - {}", style("✗").red(), style(&book.name).yellow(), message);
+            ProcessingResult::new(book.name.clone()).failure(message, 0.0)
+        })
+        .collect();
+
+    if book_folders.is_empty() && collision_results.is_empty() {
         println!(
             "{} All audiobooks already processed (use --force to reprocess)",
             style("ℹ").blue()
@@ -516,8 +534,9 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
         .into_iter()
         .partition(|b| b.case == BookCase::E);
 
-    // Outcomes of the M4B merge path, folded into the batch tally below.
-    let mut merge_results: Vec<ProcessingResult> = Vec::new();
+    // Outcomes printed as they happen (output-name collisions, M4B merges),
+    // folded into the batch tally below.
+    let mut merge_results: Vec<ProcessingResult> = collision_results;
 
     // Process M4B merges
     if !merge_books.is_empty() {
@@ -646,6 +665,27 @@ pub async fn handle_build(args: BuildArgs, config: Config) -> Result<()> {
     );
 
     Ok(())
+}
+
+/// Split books into those with a unique output filename and those sharing one.
+///
+/// Compared case-insensitively, since the default filesystems on macOS and
+/// Windows are, and `Book.m4b` would overwrite `book.m4b` there.
+fn split_output_collisions(
+    books: Vec<crate::models::BookFolder>,
+) -> (
+    Vec<crate::models::BookFolder>,
+    Vec<crate::models::BookFolder>,
+) {
+    let mut counts = std::collections::HashMap::new();
+    for book in &books {
+        *counts
+            .entry(book.get_output_filename().to_lowercase())
+            .or_insert(0usize) += 1;
+    }
+    books
+        .into_iter()
+        .partition(|book| counts[&book.get_output_filename().to_lowercase()] == 1)
 }
 
 /// Handle the organize command
@@ -1552,5 +1592,26 @@ fn prompt_no_results_action() -> Result<NoResultsAction> {
         "Search with [D]ifferent terms" => Ok(NoResultsAction::CustomSearch),
         "Enter metadata [M]anually" => Ok(NoResultsAction::ManualEntry),
         _ => Ok(NoResultsAction::Skip),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::BookFolder;
+
+    #[test]
+    fn test_split_output_collisions_fails_every_book_sharing_a_name() {
+        let books = vec![
+            BookFolder::new(PathBuf::from("/lib/One/MP3")),
+            BookFolder::new(PathBuf::from("/lib/Two/mp3")),
+            BookFolder::new(PathBuf::from("/lib/Three")),
+        ];
+
+        let (unique, colliding) = split_output_collisions(books);
+
+        assert_eq!(unique.len(), 1);
+        assert_eq!(unique[0].name, "Three");
+        assert_eq!(colliding.len(), 2);
     }
 }
