@@ -1,8 +1,8 @@
 //! Single book processor
 
 use crate::audio::{
-    generate_chapters_from_files, inject_chapters_mp4box, inject_metadata_atomicparsley,
-    parse_cue_file, write_mp4box_chapters, AacEncoder, FFmpeg,
+    generate_chapters_from_files, inject_chapters, inject_metadata_atomicparsley, parse_cue_file,
+    verify_chapter_count, AacEncoder, FFmpeg,
 };
 use crate::models::{BookFolder, ProcessingResult};
 use anyhow::{Context, Result};
@@ -248,13 +248,9 @@ impl Processor {
         let chapters = self.generate_chapters(book_folder, chapter_source)?;
 
         if !chapters.is_empty() {
-            tracing::info!("Injecting {} chapters using MP4Box", chapters.len());
+            tracing::info!("Injecting {} chapters", chapters.len());
 
-            let chapters_file = temp_dir.join("chapters.txt");
-            write_mp4box_chapters(&chapters, &chapters_file)
-                .context("Failed to write chapter file")?;
-
-            inject_chapters_mp4box(&output_path, &chapters_file)
+            inject_chapters(&output_path, &chapters)
                 .await
                 .context("Failed to inject chapters")?;
 
@@ -288,6 +284,11 @@ impl Processor {
         .context("Failed to inject metadata")?;
 
         tracing::info!("✓ Metadata injection complete");
+
+        // The finished file must still carry every chapter (issue #35).
+        if !chapters.is_empty() {
+            verify_chapter_count(&output_path, chapters.len()).await?;
+        }
 
         // Clean up temporary cover files: auto-extracted covers (.extracted_cover.jpg)
         // and Audible covers downloaded during build (audiobook-forge-cover-*.jpg).

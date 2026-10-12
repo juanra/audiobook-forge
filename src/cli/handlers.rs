@@ -1078,8 +1078,8 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
             merge_strategy,
         } => {
             use crate::audio::{
-                inject_chapters_mp4box, merge_chapters, parse_epub_chapters, parse_text_chapters,
-                read_m4b_chapters, write_mp4box_chapters, ChapterMergeStrategy,
+                inject_chapters, merge_chapters, parse_epub_chapters, parse_text_chapters,
+                read_m4b_chapters, ChapterMergeStrategy,
             };
             use std::str::FromStr;
 
@@ -1164,17 +1164,9 @@ pub async fn handle_metadata(command: MetadataCommands, config: Config) -> Resul
                     merged.len()
                 );
 
-                // Write chapters to temp file
-                let temp_chapters = std::env::temp_dir().join(format!(
-                    "chapters_{}.txt",
-                    file.file_stem().unwrap().to_string_lossy()
-                ));
-                write_mp4box_chapters(&merged, &temp_chapters)?;
-
                 // Inject chapters back into M4B
                 println!("  {} Injecting chapters into M4B...", style("→").cyan());
-                inject_chapters_mp4box(&file, &temp_chapters).await?;
-                std::fs::remove_file(&temp_chapters)?;
+                inject_chapters(&file, &merged).await?;
 
                 println!("  {} Chapters updated successfully", style("✓").green());
                 true

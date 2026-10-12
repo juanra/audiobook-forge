@@ -20,8 +20,8 @@ pub use chapter_import::{
     read_m4b_chapters, ChapterComparison, ChapterMergeStrategy, ChapterSource,
 };
 pub use chapters::{
-    generate_chapters_from_files, inject_chapters_mp4box, parse_cue_file, write_mp4box_chapters,
-    Chapter,
+    generate_chapters_from_files, inject_chapters, parse_cue_file, verify_chapter_count,
+    write_ffmetadata, Chapter,
 };
 pub use encoder::{get_encoder, AacEncoder, EncoderDetector};
 pub use ffmpeg::{AudioMetadata, FFmpeg};

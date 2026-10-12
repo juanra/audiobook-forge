@@ -1,6 +1,6 @@
 //! M4B file merger for lossless concatenation
 
-use crate::audio::{inject_chapters_mp4box, inject_metadata_atomicparsley, write_mp4box_chapters};
+use crate::audio::{inject_chapters, inject_metadata_atomicparsley, verify_chapter_count};
 use crate::audio::{merge_chapter_lists, read_m4b_chapters, Chapter, FFmpeg};
 use crate::models::{BookFolder, QualityProfile};
 use anyhow::{Context, Result};
@@ -124,10 +124,7 @@ impl M4bMerger {
         if !merged_chapters.is_empty() {
             tracing::info!("Injecting {} merged chapters...", merged_chapters.len());
 
-            let chapters_file = temp_dir.join("chapters.txt");
-            write_mp4box_chapters(&merged_chapters, &chapters_file)?;
-
-            inject_chapters_mp4box(&output_path, &chapters_file)
+            inject_chapters(&output_path, &merged_chapters)
                 .await
                 .context("Failed to inject chapters")?;
         }
@@ -136,6 +133,11 @@ impl M4bMerger {
         tracing::info!("Copying metadata from first source file...");
         self.copy_metadata_from_first(&m4b_files[0], &output_path, book_folder)
             .await?;
+
+        // The finished file must still carry every chapter (issue #35).
+        if !merged_chapters.is_empty() {
+            verify_chapter_count(&output_path, merged_chapters.len()).await?;
+        }
 
         // Clean up
         if !self.keep_temp {
