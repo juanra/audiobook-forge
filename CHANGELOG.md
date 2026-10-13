@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   injected with ffmpeg, which writes every chapter, and the count is read back
   from the finished file: a mismatch fails the book instead of reporting success.
   This also makes chapters visible in Apple Books, which ignores the atom MP4Box
-  wrote. See `docs/adr/0001-chapter-injection-with-ffmpeg.md`.
+  wrote.
 - **Merging M4B parts with different formats produced a mistimed file** (#29): the
   merger now checks sample rate, channels and codec across parts before a lossless
   concat and refuses the merge with a clear message on a mismatch. Thanks to

@@ -173,8 +173,7 @@ pub fn write_ffmetadata(chapters: &[Chapter], path: &Path) -> Result<()> {
 /// Uses ffmpeg rather than MP4Box: `MP4Box -chap` writes only the Nero `chpl`
 /// atom, whose one-byte count wrapped past 255 and silently dropped chapters
 /// (issue #35). ffmpeg writes a QuickTime chapter track with every chapter,
-/// plus a `chpl` capped at 255 for players that read only that. See
-/// docs/adr/0001-chapter-injection-with-ffmpeg.md.
+/// plus a `chpl` capped at 255 for players that read only that.
 pub async fn inject_chapters(m4b_file: &Path, chapters: &[Chapter]) -> Result<()> {
     let directory = m4b_file
         .parent()
