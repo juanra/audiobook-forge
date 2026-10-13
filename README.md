@@ -156,7 +156,7 @@ Replace generic chapter names ("Chapter 1", "Chapter 2") with meaningful titles:
 # From Audnex API (Audible chapter data)
 audiobook-forge metadata enrich --file "Book.m4b" --chapters-asin B08V3XQ7LK
 
-# From text file (simple, timestamped, or MP4Box format)
+# From text file (simple, timestamped, or MP4Box-style `CHAPTER1=` format)
 audiobook-forge metadata enrich --file "Book.m4b" \
   --chapters chapters.txt --merge-strategy keep-timestamps
 
@@ -249,4 +249,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-Built with [Rust](https://www.rust-lang.org/), [Tokio](https://tokio.rs/), [Clap](https://github.com/clap-rs/clap), [FFmpeg](https://ffmpeg.org/), [AtomicParsley](https://github.com/wez/atomicparsley), and [MP4Box/GPAC](https://github.com/gpac/gpac).
+Built with [Rust](https://www.rust-lang.org/), [Tokio](https://tokio.rs/), [Clap](https://github.com/clap-rs/clap), [FFmpeg](https://ffmpeg.org/), and [AtomicParsley](https://github.com/wez/atomicparsley).
