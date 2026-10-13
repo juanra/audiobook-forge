@@ -5,7 +5,7 @@
 Security fixes go into the latest release only. Please upgrade before reporting:
 
 ```bash
-cargo install audiobook-forge --force
+cargo install --locked audiobook-forge --force
 ```
 
 ## Reporting a vulnerability

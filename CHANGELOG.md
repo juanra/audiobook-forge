@@ -5,6 +5,17 @@ All notable changes to audiobook-forge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Rust 1.88 or later is required** and is now declared in `Cargo.toml`
+  (`rust-version`). The locked dependencies already needed it; the docs said 1.85.
+  `cargo install --locked audiobook-forge` is the recommended install.
+- **The wiki lives in the repository** (`docs/wiki/`) and is published on every push
+  to `main`. A new CLI Reference page is generated from the command definitions, and
+  tests check that every documented command parses and that the config template
+  matches the built-in defaults.
+
 ## [2.13.0] - 2026-10-12
 
 ### Fixed

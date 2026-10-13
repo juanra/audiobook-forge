@@ -322,7 +322,20 @@ test(quality): add compatibility check tests
 2. Run clippy: `cargo clippy -- -D warnings`
 3. Format code: `cargo fmt`
 4. Update CHANGELOG.md if needed
-5. Ensure binary builds: `cargo build --release`
+5. Update the user documentation (see below) if needed
+6. Ensure binary builds: `cargo build --release`
+
+---
+
+## User Documentation
+
+`docs/wiki/` is the source of the GitHub wiki. The `Wiki` workflow publishes it on every push to `main`, so never edit the wiki directly.
+
+- **Same commit rule**: a change to a flag, a config key, a default, an output name or any other user-visible behaviour updates `docs/wiki/` (and `README.md` when it covers it) in the same commit, like the CHANGELOG.
+- **Generated page**: `docs/wiki/CLI-Reference.md` comes from the clap definitions. After changing the CLI, run `UPDATE_DOCS=1 cargo test --test docs_test` and commit the result.
+- **Checked by tests** (`tests/docs_test.rs`): every `audiobook-forge ...` example in the README and wiki must parse, the CLI reference must be current, and `templates/config.yaml` must match `Config::default()`.
+- **Document what the code does today**: a setting that has no effect is marked as such or left out, never described as working.
+- **Before each release**: audit the wiki and README against the code (prose drifts in ways the tests cannot see) and fix what is stale before tagging.
 
 ---
 
@@ -365,8 +378,5 @@ test(quality): add compatibility check tests
 
 ## Additional Resources
 
-- Main documentation: `docs/`
-- Phase implementation details: `docs/development/phases/`
-- Specifications: `docs/specs/` (for future requirements)
-- User guides: `docs/guides/`
+- User documentation: `docs/wiki/` (published as the GitHub wiki)
 - Changelog: `CHANGELOG.md` (in root)

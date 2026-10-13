@@ -36,7 +36,7 @@ This project and everyone participating in it is governed by our Code of Conduct
 
 Before contributing, make sure you have:
 
-- **Rust 1.75+** installed ([rustup.rs](https://rustup.rs/))
+- **Rust 1.88+** installed ([rustup.rs](https://rustup.rs/))
 - **Git** for version control
 - **FFmpeg and AtomicParsley** installed
 - Familiarity with Rust and async programming (Tokio)

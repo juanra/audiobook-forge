@@ -2,6 +2,7 @@
 name = "audiobook-forge"
 version = "2.13.0"
 edition = "2021"
+rust-version = "1.88"
 authors = ["Audiobook Forge Contributors"]
 license = "MIT"
 description = "CLI tool for converting audiobook directories to M4B format with chapters and metadata"
@@ -84,6 +85,8 @@ futures = "0.3"
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.0"
+clap-markdown = "0.1"
+shell-words = "1.1"
 
 [profile.release]
 opt-level = 3

@@ -1,6 +1,6 @@
 # Audiobook Forge 🎧
 
-[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-77%20passing-brightgreen.svg)](tests/)
 
@@ -87,7 +87,7 @@ sudo dnf install ffmpeg atomicparsley
 
 ### 2. Install Audiobook Forge
 
-**Rust 1.85 or later** is required. Distro-packaged Rust (e.g., Ubuntu 24.04 ships 1.75) is often too old — install via [rustup](https://rustup.rs/):
+**Rust 1.88 or later** is required. Distro-packaged Rust (e.g., Ubuntu 24.04 ships 1.75) is often too old; install via [rustup](https://rustup.rs/):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -96,7 +96,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 Then install Audiobook Forge:
 
 ```bash
-cargo install audiobook-forge
+cargo install --locked audiobook-forge
 ```
 
 ### 3. Verify
