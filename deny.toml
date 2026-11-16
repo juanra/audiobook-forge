@@ -30,7 +30,7 @@ allow = [
 # today's reality rather than failing every build; the incompatibility itself
 # is tracked as an issue and needs a decision, not a config entry.
 exceptions = [
-    { name = "epub", allow = ["GPL-3.0"] },
+    { name = "epub", allow = ["GPL-3.0-or-later"] },  # 2.1.6 relabelled its licence from GPL-3.0
 ]
 confidence-threshold = 0.8
 
